@@ -22,7 +22,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION CLOUD (FIREBASE) ---
         let firebaseConfig;
@@ -53,6 +53,7 @@
             window.fbOnAuthStateChanged = onAuthStateChanged;
             window.fbDoc = doc;
             window.fbSetDoc = setDoc;
+            window.fbGetDoc = getDoc;
             window.fbCollection = collection;
             window.fbOnSnapshot = onSnapshot;
 
@@ -77,6 +78,115 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* ===================================================== */
+        /* OFFRE DE SÉJOUR ILLUSTRÉE — pages A4 (aperçu + PDF)    */
+        /* ===================================================== */
+        :root {
+            --of-bg: #f9f5ef; --of-beige: #f0e7da; --of-paper: #fffcf8; --of-dark: #271c17; --of-dark2: #33251d;
+            --of-brown: #795327; --of-gold: #b08d57; --of-line: #e4d8c9; --of-muted: #6f5d50;
+        }
+        #offer-print-portal { display: none; }
+        .offer-page {
+            width: 210mm; height: 297mm; background: var(--of-bg); color: var(--of-dark); position: relative; overflow: hidden;
+            box-sizing: border-box; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+            font-size: 8.6pt; line-height: 1.45; text-align: left;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            break-after: page; page-break-after: always; break-inside: avoid; page-break-inside: avoid;
+        }
+        .offer-page:last-child { break-after: auto; page-break-after: auto; }
+        .offer-page *, .offer-page *::before, .offer-page *::after { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .offer-page p, .offer-page h1, .offer-page h3, .offer-page figure { margin: 0; }
+        .of-inner { position: absolute; inset: 0; padding: 13mm 16mm 0 16mm; display: flex; flex-direction: column; }
+        .of-content { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .of-footer { flex: 0 0 auto; height: 13mm; border-top: 0.3mm solid var(--of-line); display: flex; align-items: center; justify-content: space-between; gap: 4mm;
+            font-size: 6.3pt; color: var(--of-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+        .of-footer-center { flex: 1; text-align: center; }
+        .of-footer-left { min-width: 30mm; display: flex; align-items: center; }
+        .of-pageno { min-width: 14mm; text-align: right; font-weight: 700; color: var(--of-dark); letter-spacing: 0.04em; }
+        .of-serif, .of-h1, .of-h3, .of-cover-for, .of-slogan { font-family: Georgia, "Times New Roman", "Liberation Serif", serif; }
+        .of-kicker { font-size: 6.6pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--of-brown); margin-bottom: 4mm; flex: 0 0 auto; }
+        .of-h1 { font-size: 22pt; line-height: 1.12; font-weight: 400; color: var(--of-dark); margin-bottom: 1.6mm !important; }
+        .of-h3 { font-size: 13pt; font-weight: 400; color: var(--of-dark); margin-bottom: 1.5mm !important; }
+        .of-sub { font-weight: 700; font-size: 8.4pt; color: var(--of-dark); }
+        .of-loc { font-size: 7.4pt; color: var(--of-muted); margin-top: 1.2mm !important; }
+        .of-label { font-size: 7.6pt; font-weight: 700; color: var(--of-brown); margin-bottom: 0.8mm; }
+        .of-text { font-size: 8pt; color: var(--of-dark2); white-space: pre-line; }
+        .of-small { font-size: 6.9pt; color: var(--of-muted); white-space: pre-line; }
+        .of-pricebox { background: var(--of-beige); padding: 2.8mm 4mm; margin: 4mm 0 4mm; flex: 0 0 auto; }
+        .of-pricebox-label { font-size: 6.6pt; font-weight: 700; color: var(--of-brown); }
+        .of-pricebox-total { font-size: 13pt; font-weight: 700; color: var(--of-dark); margin: 1mm 0 0.5mm; }
+        .of-pricebox-total.of-ondemand { font-style: italic; font-weight: 400; font-family: Georgia, "Times New Roman", serif; }
+        .of-pricebox-rate { font-size: 6.8pt; color: var(--of-muted); }
+        .of-figure { flex: 0 0 auto; }
+        .of-photo { position: relative; width: 100%; overflow: hidden; background: #e9e1d5; }
+        .of-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+        .of-photo-empty, .of-photo-missing { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 3mm; gap: 1mm; }
+        .of-photo-empty { color: var(--of-muted); font-size: 8pt; border: 0.3mm dashed var(--of-gold); background: var(--of-paper); }
+        .of-photo-missing { color: #8b2e1e; font-weight: 700; font-size: 8pt; border: 0.4mm dashed #b5523b; background: #fbeee9; }
+        .of-photo-missing small { font-weight: 400; font-size: 6.5pt; color: #8b2e1e; }
+        .of-photo-loading { color: var(--of-muted); background: var(--of-paper); border-color: var(--of-line); }
+        .of-photo-band { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(39,28,23,0.92); color: #fff; font-size: 6.8pt; font-weight: 700; padding: 2mm 3mm; letter-spacing: 0.02em; }
+        .of-photo-band .of-illus { color: #e6c88f; }
+        .of-caption { font-size: 6.6pt; color: var(--of-muted); margin-top: 1.3mm; }
+        .of-illus { color: var(--of-brown); font-weight: 700; }
+        .of-grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8mm; row-gap: 3.5mm; border-top: 0.3mm solid var(--of-line); padding-top: 4mm; margin-top: 4mm; flex: 0 0 auto; }
+        .of-note { background: var(--of-beige); padding: 3.5mm 5mm; margin-top: 4.5mm; flex: 0 0 auto; }
+        .of-note p { font-size: 7.8pt; color: var(--of-dark2); white-space: pre-line; }
+        .of-note p + p { margin-top: 2mm; }
+        .of-note .of-note-small { font-size: 6.9pt; color: var(--of-muted); }
+        .of-link { color: var(--of-brown); font-weight: 700; font-size: 7.4pt; text-decoration: underline; }
+        .of-gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm 5mm; margin-top: 3mm; }
+        .of-cover-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 6mm; margin-top: 5mm; font-size: 7.6pt; color: var(--of-dark2); }
+        .of-cover-meta strong { font-size: 10pt; color: var(--of-dark); }
+        .of-cover-title { font-size: 30pt !important; margin-top: 2mm; }
+        .of-cover-for { font-style: italic; color: var(--of-brown); font-size: 15pt; }
+        .of-cover-intro { margin-top: 4mm !important; font-size: 7.8pt; color: var(--of-dark2); }
+        .of-availability { font-size: 7pt; font-weight: 700; color: var(--of-brown); margin-top: 1mm !important; }
+        .of-cover-photo { flex: 1 1 auto; min-height: 60mm; margin: 5mm 0 4mm; position: relative; display: flex; }
+        .of-cover-photo .of-figure { flex: 1 1 auto; display: flex; }
+        .of-cover-photo .of-photo { height: auto !important; flex: 1 1 auto; }
+.of-flexphoto { flex: 1 1 84mm; min-height: 70mm; max-height: 122mm; display: flex; }
+        .of-flexphoto .of-figure { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+        .of-flexphoto .of-photo { flex: 1 1 auto; min-height: 0; }
+        .of-flexphoto .of-caption { flex: 0 0 auto; }
+        .of-logo-text { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; color: var(--of-dark); font-family: Georgia, "Times New Roman", serif; }
+        .of-logo-text span { font-size: 1em; letter-spacing: 0.12em; font-weight: 700; }
+        .of-logo-text small { font-size: 0.42em; letter-spacing: 0.25em; color: var(--of-brown); text-transform: uppercase; margin-top: 0.25em; font-family: Helvetica, Arial, sans-serif; }
+        .of-table { width: 100%; border-collapse: collapse; margin-top: 5mm; font-size: 7.6pt; }
+        .of-table th { background: var(--of-dark); color: #fff; text-align: left; padding: 2.4mm 3mm; font-size: 7pt; font-weight: 700; }
+        .of-table td { padding: 2.2mm 3mm; border-bottom: 0.25mm solid var(--of-line); background: var(--of-paper); font-weight: 700; color: var(--of-dark); }
+        .of-table .r { text-align: right; white-space: nowrap; }
+        .of-table tr.of-group td { background: var(--of-beige); color: var(--of-brown); font-size: 6.4pt; letter-spacing: 0.1em; text-transform: uppercase; padding: 1.6mm 3mm; }
+        .of-table .of-ondemand { font-style: italic; font-weight: 400; color: var(--of-muted); }
+        .of-row-n { display: inline-block; min-width: 7mm; color: var(--of-gold); font-weight: 700; }
+        .of-feebox { background: var(--of-beige); padding: 3.2mm 4.5mm; margin-top: 4.5mm; border-left: 1mm solid var(--of-gold); }
+        .of-feebox p { font-size: 7.4pt; color: var(--of-dark2); }
+        .of-transfer { display: flex; gap: 5mm; background: var(--of-beige); padding: 3.5mm; margin-top: 4mm; align-items: stretch; }
+        .of-transfer-photo { width: 42mm; flex: 0 0 42mm; position: relative; min-height: 26mm; }
+        .of-transfer-photo .of-photo { position: absolute; inset: 0; height: auto !important; }
+        .of-transfer-price { font-weight: 700; color: var(--of-brown); font-size: 8pt; margin-bottom: 1.4mm; }
+        .of-transfer p { font-size: 7.4pt; color: var(--of-dark2); }
+        .of-optional { display: inline-block; font-size: 6pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--of-paper); background: var(--of-brown); padding: 0.6mm 2mm; margin-bottom: 1.5mm; }
+        .of-contact { display: flex; justify-content: space-between; align-items: flex-end; border-top: 0.3mm solid var(--of-line); padding-top: 3mm; margin-top: 4mm; font-size: 7.2pt; color: var(--of-dark2); }
+        .of-contact strong { color: var(--of-dark); }
+        .of-gold-rule { width: 14mm; height: 0.5mm; background: var(--of-gold); margin: 5mm auto; }
+        .of-slogan { text-align: center; font-size: 19pt; line-height: 1.25; color: var(--of-dark); }
+        .of-slogan em { font-style: italic; }
+        .of-center { text-align: center; }
+        /* Aperçu à l'écran */
+        .of-preview .offer-page { margin: 0 auto 10mm; box-shadow: 0 6px 30px rgba(15, 23, 42, 0.35); }
+        .of-preview .offer-page[data-overflow="1"] { outline: 3px solid #dc2626; outline-offset: 2px; }
+        .of-thumb .of-photo-missing, .of-thumb .of-photo-empty { font-size: 11px; padding: 6px; }
+        .of-thumb .of-photo-missing small { font-size: 9px; }
+        .of-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        @media print {
+            @page { size: A4; margin: 0; }
+            body.printing-offer { position: static !important; overflow: visible !important; height: auto !important; width: auto !important; background: #fff !important; margin: 0 !important; }
+            body.printing-offer > *:not(#offer-print-portal) { display: none !important; }
+            body.printing-offer #offer-print-portal { display: block !important; }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans fixed inset-0 w-full h-full overflow-hidden">
@@ -274,8 +384,20 @@
 
             const saveState = (newValue) => {
                 setState(newValue);
-                localStorage.setItem('diallo_' + docName, typeof newValue === 'string' ? newValue : JSON.stringify(newValue));
-                
+                const serialized = typeof newValue === 'string' ? newValue : JSON.stringify(newValue);
+                try {
+                    localStorage.setItem('diallo_' + docName, serialized);
+                } catch (e) {
+                    // Mémoire locale pleine : on n'interrompt pas l'application, le cloud reste la référence.
+                    console.error("Sauvegarde locale impossible (" + docName + ")", e);
+                }
+
+                // Firestore limite chaque document à 1 Mo : on prévient avant une perte de synchronisation silencieuse.
+                if (serialized && serialized.length > 900000 && !window['__diallo_size_warned_' + docName]) {
+                    window['__diallo_size_warned_' + docName] = true;
+                    setTimeout(() => alert("Attention : les données « " + docName + " » approchent la limite de synchronisation cloud (1 Mo). Utilisez des liens (URL) plutôt que des images importées et archivez les anciens documents."), 50);
+                }
+
                 if (user && window.fbDb) {
                     const docRef = window.fbDoc(window.fbDb, 'artifacts', window.fbAppId, 'public', 'data', 'shared_workspace', docName);
                     window.fbSetDoc(docRef, { value: newValue }).catch(console.error);
@@ -335,12 +457,54 @@
 
           const isDataLoaded = logoLoaded && catLoaded && cliLoaded && quoLoaded && ordLoaded && reqLoaded;
           const [currentPayload, setCurrentPayload] = useState(null);
+          const [navKey, setNavKey] = useState(0);
 
           const navigateTo = (view, payload = null) => {
             setCurrentPayload(payload);
             setCurrentView(view);
+            setNavKey(k => k + 1); // force un nouvel écran (ex. ouvrir la copie d'une offre depuis l'offre)
             setIsMobileMenuOpen(false);
           };
+
+          // --- Devis, propositions et offres illustrées ---
+          const upsertInList = (list, q) => (list.some(old => old.id === q.id) ? list.map(old => (old.id === q.id ? q : old)) : [q, ...list]);
+
+          const makeQuoteCopy = (q) => {
+              const copy = JSON.parse(JSON.stringify(q));
+              copy.id = `DEV-${Date.now().toString().slice(-6)}`;
+              copy.date = new Date().toLocaleDateString('fr-FR');
+              copy.tripName = `${q.tripName || 'Document'} (Copie)`;
+              copy.status = 'Brouillon';
+              if (copy.stayOffer) {
+                  const today = todayISO();
+                  const c = clients.find(cl => cl.id == copy.clientId);
+                  copy.stayOffer.selection = null; // le choix du client et le devis final ne sont pas copiés
+                  copy.stayOffer.issuedDate = today;
+                  copy.stayOffer.reference = makeOfferReference(c, today);
+                  copy.stayOffer.title = copy.stayOffer.title ? copy.stayOffer.title : '';
+              }
+              return copy;
+          };
+
+          const handleDuplicateQuote = (q) => { saveQuotes([makeQuoteCopy(q), ...quotes]); };
+
+          const handleQuoteStatusChange = (id, newStatus) => {
+              const current = quotes.find(q => q.id === id);
+              // Une offre illustrée contient des options alternatives : elle ne devient jamais une commande telle quelle.
+              if (current && current.stayOffer) {
+                  saveQuotes(quotes.map(q => (q.id === id ? { ...q, status: newStatus } : q)));
+                  if (newStatus === 'Validé' && current.status !== 'Validé') {
+                      setTimeout(() => alert("Offre illustrée marquée comme validée.\n\nPour créer la commande, ouvrez l'offre, indiquez l'hébergement retenu puis « Générer le devis final » : c'est ce devis qui deviendra la commande."), 100);
+                  }
+                  return;
+              }
+              let shouldConvert = false; let targetQuote = null;
+              const updatedQuotes = quotes.map(quote => { if (quote.id === id) { const updated = { ...quote, status: newStatus }; if (newStatus === 'Validé' && quote.status !== 'Validé') { shouldConvert = true; targetQuote = updated; } return updated; } return quote; });
+              saveQuotes(updatedQuotes);
+              if (shouldConvert && targetQuote) { if (!orders.some(o => o.quoteRef === id)) { const newOrder = { ...targetQuote, id: `CMD-${Date.now()}`, quoteRef: targetQuote.id, orderStatus: 'En attente', date: new Date().toISOString().split('T')[0] }; setTimeout(() => alert("Devis validé ! Transformé en commande."), 100); saveOrders([newOrder, ...orders]); } }
+          };
+
+          const openQuote = (q) => navigateTo(q && q.stayOffer ? 'stay-offer' : 'quote-builder', { quote: q });
 
           if (!isDataLoaded) {
               return (
@@ -403,7 +567,7 @@
                       )}
                   </div>
 
-                  <NavItem icon="ph-file-text" label="Devis & Propositions" active={currentView === 'quotes' || currentView === 'quote-builder'} onClick={() => navigateTo('quotes')} />
+                  <NavItem icon="ph-file-text" label="Devis & Propositions" active={currentView === 'quotes' || currentView === 'quote-builder' || currentView === 'stay-offer'} onClick={() => navigateTo('quotes')} />
                   <NavItem icon="ph-check-circle" label="Commandes" active={currentView === 'orders'} onClick={() => navigateTo('orders')} />
                   <NavItem icon="ph-receipt" label="Factures" active={currentView === 'invoices' || currentView === 'invoice'} onClick={() => navigateTo('invoices')} />
                   
@@ -437,7 +601,7 @@
                       <NavItem icon="ph-tray" label="Demandes Clients" active={currentView === 'requests'} onClick={() => navigateTo('requests')} />
                       {requests.length > 0 && <span className="absolute right-4 top-3.5 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{requests.length}</span>}
                     </div>
-                    <NavItem icon="ph-file-text" label="Devis & Propositions" active={currentView === 'quotes' || currentView === 'quote-builder'} onClick={() => navigateTo('quotes')} />
+                    <NavItem icon="ph-file-text" label="Devis & Propositions" active={currentView === 'quotes' || currentView === 'quote-builder' || currentView === 'stay-offer'} onClick={() => navigateTo('quotes')} />
                     <NavItem icon="ph-check-circle" label="Commandes" active={currentView === 'orders'} onClick={() => navigateTo('orders')} />
                     <NavItem icon="ph-receipt" label="Factures" active={currentView === 'invoices' || currentView === 'invoice'} onClick={() => navigateTo('invoices')} />
                     <div className="pt-4 mt-4 border-t border-slate-800">
@@ -458,9 +622,15 @@
                   
                   {currentView === 'crm' && <CRMView clients={clients} saveClients={saveClients} onNavigate={navigateTo} />}
                   
-                  {currentView === 'quotes' && <QuotesListView quotes={quotes} clients={clients} onNewQuote={() => navigateTo('quote-builder')} onEdit={(q) => navigateTo('quote-builder', { quote: q })} onDuplicate={(q) => { const duplicatedQuote = { ...q, id: `DEV-${Date.now().toString().slice(-6)}`, date: new Date().toLocaleDateString('fr-FR'), tripName: `${q.tripName} (Copie)`, status: 'Brouillon' }; saveQuotes([duplicatedQuote, ...quotes]); }} onDelete={(id) => { saveQuotes(quotes.filter(quote => quote.id !== id)); }} onStatusChange={(id, newStatus) => { let shouldConvert = false; let targetQuote = null; const updatedQuotes = quotes.map(quote => { if (quote.id === id) { const updated = { ...quote, status: newStatus }; if (newStatus === 'Validé' && quote.status !== 'Validé') { shouldConvert = true; targetQuote = updated; } return updated; } return quote; }); saveQuotes(updatedQuotes); if (shouldConvert && targetQuote) { if (!orders.some(o => o.quoteRef === id)) { const newOrder = { ...targetQuote, id: `CMD-${Date.now()}`, quoteRef: targetQuote.id, orderStatus: 'En attente', date: new Date().toISOString().split('T')[0] }; setTimeout(() => alert("Devis validé ! Transformé en commande."), 100); saveOrders([newOrder, ...orders]); } } }} />}
+                  {currentView === 'quotes' && <QuotesListView quotes={quotes} clients={clients} onNewQuote={() => navigateTo('quote-builder')} onNewStayOffer={() => navigateTo('stay-offer')} onEdit={openQuote} onDuplicate={handleDuplicateQuote} onDelete={(id) => { saveQuotes(quotes.filter(quote => quote.id !== id)); }} onStatusChange={handleQuoteStatusChange} />}
                   
-                  {currentView === 'quote-builder' && <QuoteBuilderView clients={clients} catalog={catalog} logoUrl={logoUrl} payload={currentPayload} onSave={(q) => { if(currentPayload && currentPayload.quote && quotes.some(old => old.id === q.id)) { saveQuotes(quotes.map(old => old.id === q.id ? q : old)); } else { saveQuotes([q, ...quotes]); } navigateTo('quotes'); }} onCancel={() => navigateTo('quotes')} />}
+                  {currentView === 'quote-builder' && <QuoteBuilderView clients={clients} catalog={catalog} logoUrl={logoUrl} payload={currentPayload} onOpenStayOffer={(prefill) => navigateTo('stay-offer', { prefill })} onSave={(q) => { if(currentPayload && currentPayload.quote && quotes.some(old => old.id === q.id)) { saveQuotes(quotes.map(old => old.id === q.id ? q : old)); } else { saveQuotes([q, ...quotes]); } navigateTo('quotes'); }} onCancel={() => navigateTo('quotes')} />}
+
+                  {currentView === 'stay-offer' && <StayOfferBuilderView key={navKey} clients={clients} catalog={catalog} saveCatalog={saveCatalog} logoUrl={logoUrl} payload={currentPayload} quotes={quotes}
+                      onSaveOffer={(q) => saveQuotes(upsertInList(quotes, q))}
+                      onDuplicate={(q) => { const copy = makeQuoteCopy(q); saveQuotes([copy, ...upsertInList(quotes, q)]); navigateTo('stay-offer', { quote: copy }); }}
+                      onGenerateFinal={(offerQuote, finalQuote) => { saveQuotes([finalQuote, ...upsertInList(quotes, offerQuote)]); navigateTo('quote-builder', { quote: finalQuote }); setTimeout(() => alert("Devis final " + finalQuote.id + " créé à partir de l'hébergement retenu.\nVérifiez-le puis passez-le en « Validé » pour créer la commande."), 150); }}
+                      onCancel={() => navigateTo('quotes')} />}
                   
                   {currentView === 'orders' && <OrdersView orders={orders} clients={clients} setOrders={saveOrders} onDeleteOrder={(id) => saveOrders(orders.filter(o => o.id !== id))} onNavigate={navigateTo} />}
                   {currentView === 'invoices' && <InvoicesListView orders={orders} clients={clients} onNavigate={navigateTo} />}
@@ -590,6 +760,12 @@
                       <p className="text-xs text-slate-500">Pour envoi WhatsApp / Email</p>
                     </button>
 
+                    <button onClick={() => onNavigate('stay-offer')} className="p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 text-left transition">
+                      <i className="ph ph-images text-2xl text-amber-600 mb-2"></i>
+                      <p className="font-bold text-sm">Offre de séjour illustrée</p>
+                      <p className="text-xs text-slate-500">Photos, fiches et PDF A4</p>
+                    </button>
+
                     <button onClick={() => onNavigate('catalog')} className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 text-left transition">
                       <i className="ph ph-database text-2xl text-purple-500 mb-2"></i>
                       <p className="font-bold text-sm">Gérer le catalogue</p>
@@ -619,6 +795,14 @@
                 saveRequests(requests.filter(r => r.id !== req.id));
                 setSelectedReq(null);
                 alert("Le client a été ajouté à votre CRM avec ses souhaits !");
+            };
+
+            const handleAcceptAndOffer = (req) => {
+                const newClient = { id: Date.now(), firstName: req.firstName, lastName: req.lastName, email: req.email, phone: req.phone, status: 'prospect', prospectData: req };
+                saveClients([newClient, ...clients]);
+                saveRequests(requests.filter(r => r.id !== req.id));
+                setSelectedReq(null);
+                onNavigate('stay-offer', { prospectId: newClient.id, prefill: { clientId: newClient.id, destination: req.dest && cityKey(req.dest) !== 'maroc' ? req.dest : '', dateIn: req.dateIn, dateOut: req.dateOut, pax: req.pax } });
             };
 
             const handleRefuse = (id) => {
@@ -750,10 +934,13 @@
                                     </div>
 
                                 </div>
-                                <div className="p-6 bg-white border-t flex gap-4 shrink-0">
+                                <div className="p-6 bg-white border-t flex flex-wrap gap-4 shrink-0">
                                     <button onClick={() => handleRefuse(selectedReq.id)} className="px-6 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition">Supprimer</button>
                                     <button onClick={() => handleAccept(selectedReq)} className="flex-1 bg-amber-500 text-slate-900 font-bold py-3 rounded-xl hover:bg-amber-600 shadow-lg shadow-amber-500/30 flex justify-center items-center gap-2">
                                         <i className="ph ph-check-circle text-xl"></i> Accepter et créer Contact
+                                    </button>
+                                    <button onClick={() => handleAcceptAndOffer(selectedReq)} className="flex-1 bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 flex justify-center items-center gap-2">
+                                        <i className="ph ph-images text-xl text-amber-500"></i> Accepter et créer une offre illustrée
                                     </button>
                                 </div>
                             </div>
@@ -831,6 +1018,7 @@
                         </td>
                         <td className="p-4 text-right flex justify-end items-center gap-2">
                           <button onClick={() => onNavigate('quote-builder', { prospectId: c.id })} className="text-xs bg-amber-500 text-slate-900 font-bold px-2 py-1.5 rounded hover:bg-amber-600 shadow-sm flex items-center gap-1"><i className="ph ph-magic-wand text-sm"></i> Créer Devis</button>
+                          <button onClick={() => onNavigate('stay-offer', { prospectId: c.id })} className="text-xs bg-slate-900 text-white font-bold px-2 py-1.5 rounded hover:bg-slate-700 shadow-sm flex items-center gap-1" title="Offre de séjour illustrée"><i className="ph ph-images text-sm text-amber-400"></i> Offre illustrée</button>
                           <button onClick={() => { setEditingClient(c); setIsModalOpen(true); }} className="text-slate-400 hover:text-amber-500 transition ml-1"><i className="ph ph-pencil-simple text-lg"></i></button>
                         </td>
                       </tr>
@@ -896,6 +1084,7 @@
                             )}
 
                             <button onClick={() => { onNavigate('quote-builder', { prospectId: prospectModal.id }); setProspectModal(null); }} className="w-full mt-4 bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 flex justify-center items-center gap-2"><i className="ph ph-magic-wand text-amber-500"></i> Générer le Devis</button>
+                            <button onClick={() => { onNavigate('stay-offer', { prospectId: prospectModal.id }); setProspectModal(null); }} className="w-full mt-2 bg-amber-500 text-slate-900 font-bold py-3 rounded-xl hover:bg-amber-600 flex justify-center items-center gap-2"><i className="ph ph-images"></i> Créer une offre de séjour illustrée</button>
                         </div>
                     </div>
                 </div>
@@ -904,7 +1093,7 @@
           );
         }
 
-        function QuotesListView({ quotes, clients, onNewQuote, onEdit, onStatusChange, onDuplicate, onDelete }) {
+        function QuotesListView({ quotes, clients, onNewQuote, onNewStayOffer, onEdit, onStatusChange, onDuplicate, onDelete }) {
           const getClientName = (id) => {
             const c = clients.find(c => c.id == id);
             return c ? (c.firstName + " " + c.lastName) : 'Inconnu';
@@ -917,9 +1106,14 @@
                   <h2 className="text-3xl font-black text-slate-800 tracking-tight">Devis & Propositions</h2>
                   <p className="text-slate-500 mt-1">Gérez vos propositions commerciales.</p>
                 </div>
-                <button onClick={onNewQuote} className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-amber-600 transition flex items-center gap-2 shadow-lg">
-                  <i className="ph ph-plus-circle text-lg"></i> <span className="hidden sm:inline">Créer un devis</span>
-                </button>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button onClick={onNewStayOffer} className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-slate-800 transition flex items-center gap-2 shadow-lg">
+                    <i className="ph ph-images text-lg text-amber-500"></i> <span className="hidden sm:inline">Offre de séjour illustrée</span>
+                  </button>
+                  <button onClick={onNewQuote} className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-amber-600 transition flex items-center gap-2 shadow-lg">
+                    <i className="ph ph-plus-circle text-lg"></i> <span className="hidden sm:inline">Créer un devis</span>
+                  </button>
+                </div>
               </div>
 
               {quotes.length === 0 ? (
@@ -936,7 +1130,9 @@
                         <div>
                           <p className="text-xs font-bold text-slate-400 mb-1">{q.date} • {q.id}</p>
                           <h3 className="font-bold text-lg leading-tight">
-                            {q.docType === 'proposition' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded mr-2 align-middle uppercase tracking-widest">Proposition</span>}
+                            {q.stayOffer ? <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded mr-2 align-middle uppercase tracking-widest">Offre illustrée</span>
+                              : q.docType === 'proposition' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded mr-2 align-middle uppercase tracking-widest">Proposition</span>}
+                            {q.sourceOfferId && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded mr-2 align-middle uppercase tracking-widest">Devis final</span>}
                             {q.tripName}
                           </h3>
                           <p className="text-sm text-amber-600 font-medium mt-1"><i className="ph ph-user"></i> {getClientName(q.clientId)}</p>
@@ -966,10 +1162,17 @@
                         </div>
                       </div>
                       <div className="mt-auto">
-                        <p className="text-2xl font-black text-slate-800 mb-4">{q.docType === 'proposition' ? <span className="text-base text-slate-500 font-medium italic">Choix à la carte</span> : renderMoney(q.total || 0, q.currency || 'MAD')}</p>
+                        {q.stayOffer ? (
+                          <div className="mb-4">
+                            <p className="text-base text-slate-500 font-medium italic">{(q.stayOffer.options || []).length} hébergement(s) au choix · {nightsLabel(nightsBetween(q.stayOffer.dateIn, q.stayOffer.dateOut))}</p>
+                            {q.stayOffer.selection && q.stayOffer.selection.finalQuoteId && <p className="text-xs text-emerald-700 font-bold mt-1"><i className="ph ph-check-circle"></i> Devis final : {q.stayOffer.selection.finalQuoteId}</p>}
+                          </div>
+                        ) : (
+                          <p className="text-2xl font-black text-slate-800 mb-4">{q.docType === 'proposition' ? <span className="text-base text-slate-500 font-medium italic">Choix à la carte</span> : renderMoney(q.total || 0, q.currency || 'MAD')}</p>
+                        )}
                         <div className="flex gap-2">
                           <button onClick={() => onEdit(q)} className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg text-sm transition text-center flex justify-center items-center gap-1">
-                            <i className="ph ph-pencil-simple"></i> Editer / PDF
+                            <i className={`ph ${q.stayOffer ? 'ph-images' : 'ph-pencil-simple'}`}></i> {q.stayOffer ? 'Ouvrir / Aperçu PDF' : 'Editer / PDF'}
                           </button>
                         </div>
                       </div>
@@ -981,7 +1184,7 @@
           );
         }
 
-        function QuoteBuilderView({ clients, catalog, logoUrl, payload, onSave, onCancel }) {
+        function QuoteBuilderView({ clients, catalog, logoUrl, payload, onSave, onCancel, onOpenStayOffer }) {
           const existingQuote = payload ? payload.quote : null;
           const prospectId = payload ? payload.prospectId : null;
 
@@ -1016,6 +1219,9 @@
           const [isAutoFee, setIsAutoFee] = useState(existingQuote ? existingQuote.isAutoFee : true);
           const [manualFeeMAD, setManualFeeMAD] = useState((existingQuote && existingQuote.manualFeeMAD) ? existingQuote.manualFeeMAD : 0);
           const [feeComment, setFeeComment] = useState((existingQuote && existingQuote.feeComment) ? existingQuote.feeComment : '');
+          // Nouveau mode « pourcentage » (devis finaux issus d'une offre illustrée). Les anciens devis restent en Auto / Manuel.
+          const [feePercentMode, setFeePercentMode] = useState(!!(existingQuote && existingQuote.feeMode === 'percent'));
+          const [feePercent, setFeePercent] = useState((existingQuote && existingQuote.feePercent != null) ? existingQuote.feePercent : 10);
 
           const FEE_THRESHOLD_MAD = 40000; 
           const FLAT_FEE_MAD = 4000; 
@@ -1073,19 +1279,24 @@
           const subTotalMAD = calcAccomMAD + calcActMAD + calcTransMAD + calcCarMAD;
           let calcFeeMAD = 0;
           if (subTotalMAD > 0) calcFeeMAD = subTotalMAD > FEE_THRESHOLD_MAD ? subTotalMAD * PERCENT_FEE : FLAT_FEE_MAD;
-          const finalFeeMAD = isAutoFee ? calcFeeMAD : (parseFloat(manualFeeMAD) || 0);
+          const finalFeeMAD = feePercentMode ? computeFee(subTotalMAD, feePercent) : (isAutoFee ? calcFeeMAD : (parseFloat(manualFeeMAD) || 0));
+          const feeModeValue = feePercentMode ? 'percent' : (isAutoFee ? 'auto' : 'manual');
+          const changeFeeMode = (mode) => { setFeePercentMode(mode === 'percent'); setIsAutoFee(mode === 'auto'); };
+          const travelersText = (existingQuote && existingQuote.travelersLabel && existingQuote.pax === pax) ? existingQuote.travelersLabel : `${pax} adulte(s)`;
           const totalMAD = subTotalMAD + finalFeeMAD;
 
           const doSave = () => {
             if(!clientId) { alert("Veuillez sélectionner un client."); return; }
             const q = {
+              ...(existingQuote || {}), // conserve les champs complémentaires (offre source, voyageurs…)
               id: (existingQuote && existingQuote.id) ? existingQuote.id : `DEV-${Date.now().toString().slice(-6)}`,
               date: (existingQuote && existingQuote.date) ? existingQuote.date : new Date().toLocaleDateString('fr-FR'),
               clientId: parseInt(clientId),
               docType,
               quoteCity, tripName, pax, currency, dateIn, dateOut, globalSeason,
               accommodations, activities, transports, cars,
-              isAutoFee, manualFeeMAD, feeComment,
+              isAutoFee: feePercentMode ? false : isAutoFee, manualFeeMAD: feePercentMode ? finalFeeMAD : manualFeeMAD, feeComment: feePercentMode ? `${feePercent} % du coût total des prestations retenues` : feeComment,
+              feeMode: feeModeValue, feePercent,
               total: totalMAD, subTotal: subTotalMAD, finalFee: finalFeeMAD,
               status: (existingQuote && existingQuote.status) ? existingQuote.status : 'Brouillon'
             };
@@ -1206,6 +1417,25 @@
                       </div>
                     </div>
                   </div>
+
+                  {docType === 'proposition' && onOpenStayOffer && (
+                      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-amber-500 text-slate-900 flex items-center justify-center text-2xl shrink-0"><i className="ph ph-images"></i></div>
+                          <div className="flex-1">
+                              <p className="font-black">Générer une offre de séjour illustrée</p>
+                              <p className="text-xs text-slate-300">Reprend le client, la destination, les dates, les hébergements et le transfert aéroport de cette proposition : fiches avec photos, récapitulatif et PDF A4.</p>
+                          </div>
+                          <button onClick={() => {
+                              const airport = transports.find(t => cityKey(t.name).includes('aeroport'));
+                              onOpenStayOffer({
+                                  clientId, destination: quoteCity, dateIn, dateOut, pax, season: globalSeason,
+                                  currency: currency === 'FCFA' ? 'MAD' : currency,
+                                  catalogIds: accommodations.map(a => a.id),
+                                  transfer: airport ? { price: airport.price, route: airport.name.replace('=>', 'vers') } : null,
+                              });
+                          }} className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-xl whitespace-nowrap"><i className="ph ph-arrow-right"></i> Ouvrir le générateur</button>
+                      </div>
+                  )}
 
                   {/* 2. HEBERGEMENT */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-200/50">
@@ -1375,12 +1605,19 @@
                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
                       <div className="flex justify-between items-center mb-3">
                         <span className="font-bold text-slate-200">Honoraires Di.allo</span>
-                        <label className="flex items-center gap-2 text-xs cursor-pointer bg-slate-900 px-2 py-1 rounded">
-                          <input type="checkbox" checked={isAutoFee} onChange={(e)=>setIsAutoFee(e.target.checked)} className="accent-amber-500" /> Auto
-                        </label>
+                        <select value={feeModeValue} onChange={(e)=>changeFeeMode(e.target.value)} className="text-xs bg-slate-900 border border-slate-600 px-2 py-1 rounded outline-none">
+                          <option value="auto">Auto</option>
+                          <option value="percent">Pourcentage</option>
+                          <option value="manual">Manuel</option>
+                        </select>
                       </div>
                       
-                      {isAutoFee ? (
+                      {feePercentMode ? (
+                        <div className="mb-3 flex items-center gap-2 text-xs text-slate-300">
+                          <input type="number" min="0" step="0.5" value={feePercent} onChange={(e)=>setFeePercent(e.target.value === '' ? 0 : Number(e.target.value))} className="w-20 p-2 bg-slate-900 border border-slate-600 rounded text-white font-bold outline-none focus:border-amber-500" />
+                          <span>% du sous-total ({renderMoney(subTotalMAD, currency)})</span>
+                        </div>
+                      ) : isAutoFee ? (
                         <div className="text-[11px] text-slate-400 mb-3 bg-slate-900/50 p-2 rounded leading-tight">
                           <i className="ph ph-info mr-1"></i>
                           {subTotalMAD > FEE_THRESHOLD_MAD ? "Base MAD > 40K (10%)" : "Base MAD < 40K (Forfait)"}
@@ -1441,7 +1678,7 @@
                         {docType === 'proposition' ? 'Proposition' : (accommodations.length > 0 ? 'Offre de Séjour' : 'Offre de Services')}
                     </h2>
                     <p className="text-slate-700 mt-4 font-bold text-xl">{tripName}</p>
-                    <p className="text-slate-500 mt-1">Pour {pax} adulte(s)</p>
+                    <p className="text-slate-500 mt-1">Pour {travelersText}</p>
                     <p className="text-slate-400 mt-2 text-xs">Émis le : {new Date().toLocaleDateString('fr-FR')}</p>
                     {clients.find(c => c.id == clientId) && (
                       <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg text-left inline-block min-w-[250px] shadow-sm">
@@ -1520,7 +1757,7 @@
                         <div className="flex justify-between mb-6 text-amber-700 font-bold border-b border-slate-200 pb-6">
                           <span>
                             Honoraires Di.allo Conciergerie
-                            {!isAutoFee && feeComment ? <span className="text-sm font-normal text-slate-500 italic ml-2">({feeComment})</span> : null}
+                            {feePercentMode ? <span className="text-sm font-normal text-slate-500 italic ml-2">({feePercent} % de {renderMoney(subTotalMAD, currency)})</span> : (!isAutoFee && feeComment ? <span className="text-sm font-normal text-slate-500 italic ml-2">({feeComment})</span> : null)}
                           </span>
                           <span>{renderMoney(finalFeeMAD, currency)}</span>
                         </div>
@@ -1541,8 +1778,12 @@
                 <div className="mt-16 pt-8 border-t-2 border-slate-200 text-sm text-slate-600 page-break-inside-avoid">
                   <h4 className="font-bold text-slate-900 mb-3 uppercase tracking-wider">Conditions Tarifaires & Services :</h4>
                   <ul className="list-disc pl-5 space-y-2 mb-8">
+                    {feePercentMode ? (
+                      <li>Honoraires DI'ALLO Conciergerie : {feePercent} % du coût total des prestations retenues pour le voyage, transfert compris s'il est réservé. Les honoraires sont facturés séparément.</li>
+                    ) : (<>
                     <li>Si Coût total {accommodations.length > 0 ? 'du séjour' : 'des prestations'} &gt; à 4 000 € : Une commission de 10% est prélevée sur le coût total.</li>
                     <li>Si Coût total {accommodations.length > 0 ? 'du séjour' : 'des prestations'} &lt; à 4 000 € : Forfait fixe de 400 € appliqué.</li>
+                    </>)}
                     <li><strong>Sont inclus dans le service :</strong> Conseil, orientation, conception personnalisée, accueil, assistance et accompagnement durant {accommodations.length > 0 ? 'tout le séjour' : 'vos prestations'}.</li>
                   </ul>
                   
@@ -1937,6 +2178,7 @@
                                 <th className="p-3">Ville</th>
                                 <th className="p-3">Type</th>
                                 <th className="p-3">Désignation</th>
+                                <th className="p-3">Fiche offre</th>
                                 <th className="p-3 text-right">Basse / Moy. / Haute (MAD)</th>
                             </tr>
                         </thead>
@@ -1945,7 +2187,8 @@
                                 <tr key={a.id} onClick={() => setEditingItem({type: 'accommodations', isNew: false, data: a})} className="hover:bg-amber-50 cursor-pointer transition">
                                     <td className="p-3 font-bold">{a.city}</td>
                                     <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${a.type === 'Villa' ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-700'}`}>{a.type}</span></td>
-                                    <td className="p-3 font-medium">{a.name}</td>
+                                    <td className="p-3 font-medium">{a.name}{a.commercialName ? <span className="block text-xs text-slate-400">{a.commercialName}</span> : null}</td>
+                                    <td className="p-3 text-xs text-slate-500">{(a.photos || []).length > 0 ? <span className="text-emerald-600 font-bold"><i className="ph ph-camera"></i> {(a.photos || []).length}</span> : <span className="text-slate-300"><i className="ph ph-camera-slash"></i></span>}{a.neighborhood ? ' · ' + a.neighborhood : ''}</td>
                                     <td className="p-3 text-right text-slate-600 font-mono text-xs">{(a.prices && a.prices.basse) ? a.prices.basse : 0} / <span className="font-bold text-slate-800">{(a.prices && a.prices.moyenne) ? a.prices.moyenne : 0}</span> / {(a.prices && a.prices.haute) ? a.prices.haute : 0}</td>
                                 </tr>
                             ))}
@@ -1953,6 +2196,9 @@
                     </table>
                 </div>
               </div>
+
+              {/* Destinations : photos de couverture des offres illustrées */}
+              <CatalogDestinationsPanel catalog={catalog} setCatalog={setCatalog} />
 
               {/* Activités Table */}
               <div className="bg-white rounded-2xl shadow-sm border overflow-hidden mt-8">
@@ -2030,7 +2276,7 @@
               {/* Modal d'édition/Ajout */}
               {editingItem && (
                 <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className={`bg-white rounded-2xl shadow-xl w-full ${editingItem.type === 'accommodations' ? 'max-w-3xl' : 'max-w-sm'} overflow-hidden flex flex-col max-h-[90vh]`}>
                         <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
                             <h3 className="font-bold text-lg">{editingItem.isNew ? 'Ajouter' : 'Modifier'} l'élément</h3>
                             <button onClick={() => setEditingItem(null)}><i className="ph ph-x text-xl"></i></button>
@@ -2053,11 +2299,19 @@
                                         <option value="Studio">Studio</option>
                                         <option value="Appartement">Appartement</option>
                                         <option value="Villa">Villa Privée (Premium)</option>
+                                        <option value="Riad">Riad</option>
+                                        <option value="Maison">Maison</option>
+                                        <option value="Hôtel">Hôtel</option>
+                                        <option value="Appart’hôtel">Appart’hôtel</option>
                                     </select>
                                 </div>
                             )}
 
-                            <div><label className="block text-sm font-bold mb-1">Désignation / Nom</label><input type="text" value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem, data: {...editingItem.data, name: e.target.value}})} className="w-full p-2 border rounded font-bold" /></div>
+                            <div><label className="block text-sm font-bold mb-1">Désignation / Nom {editingItem.type === 'accommodations' && <span className="text-xs font-normal text-slate-400">(interne)</span>}</label><input type="text" value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem, data: {...editingItem.data, name: e.target.value}})} className="w-full p-2 border rounded font-bold" /></div>
+
+                            {editingItem.type === 'accommodations' && (
+                                <CatalogAccommodationSheet data={editingItem.data} onChange={(patch) => setEditingItem({...editingItem, data: {...editingItem.data, ...patch}})} />
+                            )}
                             
                             {/* PRICING */}
                             <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 mt-4">
@@ -2100,6 +2354,77 @@
               )}
             </div>
           );
+        }
+
+        // Champs supplémentaires d'une fiche hébergement, utilisés par les offres illustrées (tous facultatifs).
+        function CatalogAccommodationSheet({ data, onChange }) {
+            const kind = OFFER_KINDS[data.category] ? data.category : kindFromType(data.type);
+            const field = (key, label, opts = {}) => (
+                <div className={opts.full ? 'md:col-span-2' : ''}>
+                    <label className="block text-xs font-bold mb-1 text-slate-600">{label}</label>
+                    {opts.area
+                        ? <textarea rows={2} value={data[key] || ''} onChange={e => onChange({ [key]: e.target.value })} placeholder={opts.placeholder || ''} className="w-full p-2 border rounded text-sm" />
+                        : <input type={opts.type || 'text'} value={data[key] || ''} onChange={e => onChange({ [key]: e.target.value })} placeholder={opts.placeholder || ''} className="w-full p-2 border rounded text-sm" />}
+                </div>
+            );
+            const preview = optionTitle(normalizeOfferOption({ ...data, kind, internalName: data.name, publicTitle: '' }));
+            return (
+                <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3">
+                    <p className="text-sm font-black text-amber-800 flex items-center gap-2"><i className="ph ph-images"></i> Fiche pour les offres illustrées</p>
+                    <p className="text-xs text-slate-600">Titre imprimé : <strong>« {preview} »</strong> {kind === 'location' ? '(libellé générique : le fournisseur n’apparaît jamais dans le PDF)' : '(nom commercial)'}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {field('supplierName', 'Fournisseur / propriétaire (interne)', { placeholder: 'Jamais imprimé' })}
+                        {field('supplierContact', 'Contact fournisseur (interne)')}
+                        {kind !== 'location' && field('commercialName', 'Nom commercial de l’hôtel', { placeholder: 'Ex. ONOMO Casablanca City Center' })}
+                        {kind === 'location' && field('genericLabel', 'Libellé générique (facultatif)', { placeholder: 'Auto : type + surface + quartier' })}
+                        {field('unitLabel', 'Logement / chambre', { placeholder: 'Ex. Une chambre séparée, Chambre Supérieure' })}
+                        {field('neighborhood', 'Quartier', { placeholder: 'Ex. Maârif, L’Oasis' })}
+                        {field('surface', 'Surface (m²)', { type: 'number' })}
+                        {field('address', kind === 'location' ? 'Adresse (interne)' : 'Adresse de l’hôtel')}
+                        {field('bedding', 'Couchage', { area: true })}
+                        {field('equipments', 'Équipements', { area: true })}
+                        {field('formula', 'Formule et repas', { area: true, placeholder: 'Ex. Petit-déjeuner inclus' })}
+                        {field('services', 'Services', { area: true })}
+                        {field('neighborhoodText', kind === 'location' ? 'Le quartier' : 'Emplacement', { area: true })}
+                        {field('highlight', 'Point fort (« Pour vos vacances »)', { area: true })}
+                        {field('remark', 'Points à confirmer', { area: true, full: true })}
+                        {field('websiteUrl', 'Site / galerie officielle', { type: 'url', full: true, placeholder: 'https://' })}
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold mb-2 text-slate-600">Photos (la première est la photo principale)</p>
+                        <PhotoListEditor photos={(data.photos || []).map(normalizePhoto).filter(Boolean)} onChange={(photos) => onChange({ photos })} label={preview} />
+                    </div>
+                </div>
+            );
+        }
+
+        function CatalogDestinationsPanel({ catalog, setCatalog }) {
+            const list = catalog.destinations || [];
+            const [draftName, setDraftName] = useState('');
+            const save = (next) => setCatalog({ ...catalog, destinations: next });
+            return (
+              <div className="bg-white rounded-2xl shadow-sm border overflow-hidden mt-8">
+                <div className="bg-emerald-50 p-4 border-b font-bold text-emerald-800 flex justify-between items-center">
+                    <span><i className="ph ph-image-square"></i> Destinations · photos de couverture des offres</span>
+                </div>
+                <div className="p-4 space-y-4">
+                    {list.length === 0 && <p className="text-sm text-slate-500">Aucune photo de destination. Ajoutez-en ici ou depuis une offre (« Utiliser cette photo par défaut »).</p>}
+                    {list.map((d, i) => (
+                        <div key={d.name + i} className="border rounded-xl p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                                <input value={d.name} onChange={e => save(list.map((x, k) => k === i ? { ...x, name: e.target.value } : x))} className="p-2 border rounded font-bold text-sm flex-1" />
+                                <button onClick={() => { if (window.confirm('Supprimer cette destination ?')) save(list.filter((_, k) => k !== i)); }} className="text-red-400 hover:text-red-600 px-2"><i className="ph ph-trash text-lg"></i></button>
+                            </div>
+                            <SinglePhotoField photo={normalizePhoto(d.photo)} onChange={(p) => save(list.map((x, k) => k === i ? { ...x, photo: p } : x))} label={`Photo ${d.name}`} withCredit />
+                        </div>
+                    ))}
+                    <div className="flex gap-2">
+                        <input value={draftName} onChange={e => setDraftName(e.target.value)} placeholder="Nouvelle destination (ex. Marrakech)" className="p-2 border rounded text-sm flex-1" />
+                        <button onClick={() => { if (!draftName.trim()) return; save([...list, { name: draftName.trim(), photo: null }]); setDraftName(''); }} className="text-xs bg-emerald-600 text-white px-3 py-1 rounded shadow font-bold">+ Ajouter</button>
+                    </div>
+                </div>
+              </div>
+            );
         }
 
         // --- FORMULAIRE PROSPECT PUBLIC AMELIORÉ ---
@@ -2435,6 +2760,1523 @@
                 </div>
 
               </div>
+            );
+        }
+
+        // ==========================================
+        // 6. OFFRES DE SÉJOUR ILLUSTRÉES
+        // ==========================================
+        // Une offre illustrée est enregistrée dans « quotes » comme une Proposition (docType 'proposition')
+        // avec offerKind 'illustree' et un instantané complet dans quote.stayOffer.
+        // Les hébergements sont des choix alternatifs : seul l'option retenue passe dans le devis final.
+
+        const COMPANY_INFO = {
+            name: 'DI’ALLO Conciergerie',
+            phones: ['+212 640 872 736', '+212 674 570 084'],
+            email: 'di.alloconciergerie@gmail.com',
+            website: 'di-alloconciergerie.com',
+        };
+        const OFFER_KINDS = {
+            location: { label: 'Location courte durée', kicker: 'Location courte durée' },
+            hotel: { label: 'Hôtel', kicker: 'Hôtel' },
+            apparthotel: { label: 'Appart’hôtel', kicker: 'Appart’hôtel' },
+        };
+        const ACCOM_TYPES = ['Studio', 'Appartement', 'Villa', 'Riad', 'Maison', 'Hôtel', 'Appart’hôtel'];
+        const SEASON_LABELS = { basse: 'Basse', moyenne: 'Moyenne', haute: 'Haute' };
+        const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+        const NUMBER_WORDS_FR = ['Zéro', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix', 'Onze', 'Douze'];
+        const TRIP_TYPES = { 'aller-simple': 'aller simple', 'aller-retour': 'aller-retour' };
+
+        const offerUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+        const deepClone = (v) => JSON.parse(JSON.stringify(v === undefined ? null : v));
+
+        const parseISODate = (s) => {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
+            return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+        };
+        // Nombre de nuits calculé en UTC pour éviter les décalages d'heure d'été.
+        const nightsBetween = (a, b) => {
+            const A = parseISODate(a), B = parseISODate(b);
+            if (!A || !B) return 0;
+            const diff = (Date.UTC(B.y, B.m - 1, B.d) - Date.UTC(A.y, A.m - 1, A.d)) / 86400000;
+            return diff > 0 ? Math.round(diff) : 0;
+        };
+        const dayFR = (d) => (d === 1 ? '1er' : String(d));
+        const formatLongDateFR = (iso) => { const A = parseISODate(iso); return A ? `${dayFR(A.d)} ${MONTHS_FR[A.m - 1]} ${A.y}` : ''; };
+        const formatShortDateFR = (iso) => { const A = parseISODate(iso); return A ? `${pad2(A.d)}/${pad2(A.m)}/${A.y}` : ''; };
+        const formatStayRange = (a, b) => {
+            const A = parseISODate(a), B = parseISODate(b);
+            if (!A || !B) return '';
+            if (A.y === B.y && A.m === B.m) return `Du ${dayFR(A.d)} au ${dayFR(B.d)} ${MONTHS_FR[B.m - 1]} ${B.y}`;
+            if (A.y === B.y) return `Du ${dayFR(A.d)} ${MONTHS_FR[A.m - 1]} au ${dayFR(B.d)} ${MONTHS_FR[B.m - 1]} ${B.y}`;
+            return `Du ${formatLongDateFR(a)} au ${formatLongDateFR(b)}`;
+        };
+        const nightsLabel = (n) => (n > 0 ? `${n} nuit${n > 1 ? 's' : ''}` : 'Durée à préciser');
+
+        const stripAccents = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const cityKey = (s) => stripAccents(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sameCity = (a, b) => {
+            const A = cityKey(a), B = cityKey(b);
+            if (!A || !B) return false;
+            if (A === B) return true;
+            return (A.length >= 3 && B.startsWith(A)) || (B.length >= 3 && A.startsWith(B)); // « Casa » = « Casablanca »
+        };
+        // Montant saisi -> nombre > 0, sinon null (« Sur demande »).
+        const toNumberOrNull = (v) => {
+            if (v === '' || v === null || v === undefined) return null;
+            const n = Number(String(v).replace(/\s/g, '').replace(',', '.'));
+            return isFinite(n) && n > 0 ? n : null;
+        };
+        const toCount = (v, min) => { const n = parseInt(v, 10); return isNaN(n) ? min : Math.max(min, n); };
+
+        const formatOfferAmount = (amountMAD, currency) => {
+            const cur = currency || 'MAD';
+            const val = (Number(amountMAD) || 0) * (EXCHANGE_RATES[cur] || 1);
+            const txt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: cur === 'EUR' ? 2 : 0 }).format(val);
+            return txt + ' ' + (cur === 'MAD' ? 'DH' : cur === 'EUR' ? '€' : cur);
+        };
+        // Honoraires : arrondi au centime, calcul en entiers pour éviter les erreurs de virgule flottante.
+        const computeFee = (base, percent) => Math.round((Number(base) || 0) * (Number(percent) || 0)) / 100;
+
+        const kindFromType = (type) => {
+            const t = cityKey(type);
+            if (t.startsWith('apparthotel') || t.includes('residencehoteliere')) return 'apparthotel';
+            if (t.startsWith('hotel')) return 'hotel';
+            return 'location';
+        };
+        const offerGroup = (kind) => (kind === 'location' ? 'location' : 'hotel');
+        const sortOfferOptions = (options) => [
+            ...(options || []).filter((o) => offerGroup(o.kind) === 'location'),
+            ...(options || []).filter((o) => offerGroup(o.kind) !== 'location'),
+        ];
+
+        // Préposition devant un quartier : « au Maârif », « à l’Oasis », « à la Corniche ».
+        const quartierPrep = (name) => {
+            const n = String(name || '').trim();
+            if (!n) return '';
+            let m;
+            if ((m = /^les\s+(.*)$/i.exec(n))) return 'aux ' + m[1];
+            if ((m = /^le\s+(.*)$/i.exec(n))) return 'au ' + m[1];
+            if ((m = /^la\s+(.*)$/i.exec(n))) return 'à la ' + m[1];
+            if ((m = /^l['’]\s*(.*)$/i.exec(n))) return 'à l’' + m[1];
+            if (/^[aeiouyhâàäéèêëîïôöûùüAEIOUYHÂÀÄÉÈÊËÎÏÔÖÛÙÜ]/.test(n)) return 'à ' + n;
+            return 'au ' + n;
+        };
+        const cityPrep = (name) => (name ? 'à ' + String(name).trim() : '');
+        const bareQuartier = (n) => String(n || '').trim().replace(/^(l['’]\s*|le\s+|la\s+|les\s+)/i, '');
+
+        const genericLocationLabel = (o) => {
+            const type = o.type && kindFromType(o.type) === 'location' ? o.type : 'Logement';
+            const surface = toNumberOrNull(o.surface) ? ` de ${String(o.surface).trim()} m²` : '';
+            const place = o.neighborhood ? quartierPrep(o.neighborhood) : cityPrep(o.city);
+            return `${type}${surface}${place ? ' ' + place : ''}`;
+        };
+        // Nom imprimé : nom commercial pour les hôtels, libellé générique pour les locations privées.
+        const autoOptionTitle = (o) => (o.kind === 'location'
+            ? ((o.genericLabel || '').trim() || genericLocationLabel(o))
+            : ((o.commercialName || '').trim() || (o.internalName || '').trim() || OFFER_KINDS[o.kind].label));
+        const optionTitle = (o) => (o.publicTitle || '').trim() || autoOptionTitle(o);
+        const optionSubtitle = (o) => {
+            if ((o.subtitle || '').trim()) return o.subtitle.trim();
+            const first = (o.unitLabel || '').trim() || (o.kind === 'location' ? `${o.type || 'Logement'} en location courte durée` : OFFER_KINDS[o.kind].label);
+            const surface = toNumberOrNull(o.surface) ? `${String(o.surface).trim()} m²` : '';
+            return [first, surface].filter(Boolean).join(' · ');
+        };
+        const optionLocationLine = (o, dest) => {
+            if ((o.locationLine || '').trim()) return o.locationLine.trim();
+            const city = o.city || dest || '';
+            if (o.kind !== 'location' && (o.address || '').trim()) {
+                const addr = o.address.trim();
+                return city && !cityKey(addr).includes(cityKey(city)) ? `${addr}, ${city}` : addr;
+            }
+            return [o.neighborhood ? `Quartier ${bareQuartier(o.neighborhood)}` : '', city].filter(Boolean).join(', ');
+        };
+        const optionSummaryLabel = (o) => (o.summaryLabel || '').trim()
+            || (o.kind === 'location' ? optionTitle(o) : [(o.commercialName || '').trim() || optionTitle(o), (o.formula || '').trim()].filter(Boolean).join(' · '));
+        const optionInfoItems = (o) => [
+            ['Couchage', o.bedding],
+            ['Équipements', o.equipments],
+            ['Formule et repas', o.formula],
+            ['Services', o.services],
+            [o.kind === 'location' ? 'Le quartier' : 'Emplacement', o.neighborhoodText],
+        ].filter(([, v]) => v && String(v).trim()).slice(0, 6);
+        const optionTotal = (o, nights) => { const r = toNumberOrNull(o.nightlyRate); return r !== null && nights > 0 ? r * nights : null; };
+
+        const travelersLabel = (adults, children, ages) => {
+            const a = toCount(adults, 0), c = toCount(children, 0);
+            const parts = [];
+            if (a > 0) parts.push(`${a} adulte${a > 1 ? 's' : ''}`);
+            if (c > 0) {
+                const known = (ages || []).slice(0, c).map((x) => String(x || '').trim()).filter(Boolean);
+                let txt = `${c} enfant${c > 1 ? 's' : ''}`;
+                if (known.length) txt += ` (${known.length > 1 ? known.slice(0, -1).join(', ') + ' et ' + known[known.length - 1] : known[0]} ans)`;
+                parts.push(txt);
+            }
+            return parts.join(' et ') || 'Voyageurs à préciser';
+        };
+        const offerTitle = (so) => (so.title || '').trim() || (so.destination ? `Vacances ${cityPrep(so.destination)}` : 'Votre séjour au Maroc');
+        const offerIntro = (so) => {
+            if ((so.intro || '').trim()) return so.intro.trim();
+            const n = (so.options || []).length;
+            if (!n) return '';
+            const word = NUMBER_WORDS_FR[n] || String(n);
+            return `${word} hébergement${n > 1 ? 's' : ''} au choix${so.transfer && so.transfer.enabled ? ' et un transfert privé en option' : ''}.`;
+        };
+        const makeOfferReference = (client, iso) => {
+            const A = parseISODate(iso) || parseISODate(todayISO());
+            const base = cityKey((client && (client.lastName || client.firstName)) || 'CLI').toUpperCase().replace(/[0-9]/g, '');
+            return `DAC-${String(A.y).slice(-2)}${pad2(A.m)}${pad2(A.d)}-${(base + 'XXX').slice(0, 3)}`;
+        };
+
+        const DEFAULT_TRANSFER = {
+            enabled: true, price: null, tripType: 'aller-simple',
+            route: 'Aéroport vers votre hébergement',
+            description: 'Accueil à l’arrivée, prise en charge des bagages et trajet en van privé. Siège enfant sur demande selon l’âge.',
+            photo: null,
+        };
+        const STAY_OFFER_DEFAULTS = {
+            version: 1, destination: '', title: '', clientLabel: '', dateIn: '', dateOut: '',
+            adults: 2, children: 0, childrenAges: [], season: 'moyenne', currency: 'MAD', intro: '',
+            coverPhoto: null, closingPhoto: null, closingSameAsCover: true,
+            options: [], transfer: DEFAULT_TRANSFER, feePercent: 10,
+            confirmText: 'Indiquez-nous votre hébergement préféré et, le cas échéant, l’âge des enfants. Nous vérifierons la disponibilité, le couchage, les tarifs applicables et les conditions d’annulation avant de vous proposer la réservation.',
+            conditionsText: 'Tarifs sous réserve de disponibilité et de confirmation pour les dates du séjour. La réservation est effective après validation et règlement de l’acompte demandé.',
+            issuedDate: '', reference: '', selection: null,
+        };
+        const OPTION_DEFAULTS = {
+            uid: '', source: 'manual', catalogId: null, kind: 'location', type: 'Appartement',
+            internalName: '', supplierName: '', supplierContact: '', commercialName: '', genericLabel: '', publicTitle: '',
+            unitLabel: '', subtitle: '', neighborhood: '', address: '', city: '', locationLine: '', surface: '',
+            bedding: '', equipments: '', formula: '', services: '', neighborhoodText: '', highlight: '', remark: '',
+            nightlyRate: null, rateSource: 'manual', catalogPrices: null, rateNote: '', summaryLabel: '',
+            photos: [], galleryNote: '', websiteUrl: '', snapshotAt: '',
+        };
+
+        const normalizePhoto = (p) => (p && p.src ? {
+            id: p.id || offerUid(), src: String(p.src), caption: p.caption || '', credit: p.credit || '',
+            illustrative: !!p.illustrative, captionValidated: !!p.captionValidated, authorized: !!p.authorized,
+        } : null);
+        const normalizeOfferOption = (o) => {
+            const opt = { ...OPTION_DEFAULTS, ...(o || {}) };
+            opt.uid = opt.uid || offerUid();
+            opt.kind = OFFER_KINDS[opt.kind] ? opt.kind : kindFromType(opt.type);
+            opt.photos = (Array.isArray(opt.photos) ? opt.photos : []).map(normalizePhoto).filter(Boolean);
+            opt.nightlyRate = toNumberOrNull(opt.nightlyRate);
+            return opt;
+        };
+        // Complète une offre (ancienne ou nouvelle) avec des valeurs par défaut compatibles.
+        const normalizeStayOffer = (raw) => {
+            const so = { ...STAY_OFFER_DEFAULTS, ...(raw || {}) };
+            so.transfer = { ...DEFAULT_TRANSFER, ...((raw && raw.transfer) || {}) };
+            so.transfer.price = toNumberOrNull(so.transfer.price);
+            so.transfer.photo = normalizePhoto(so.transfer.photo);
+            so.coverPhoto = normalizePhoto(so.coverPhoto);
+            so.closingPhoto = normalizePhoto(so.closingPhoto);
+            so.options = (Array.isArray(so.options) ? so.options : []).map(normalizeOfferOption);
+            so.adults = toCount(so.adults, 0);
+            so.children = toCount(so.children, 0);
+            so.childrenAges = Array.from({ length: so.children }, (_, i) => (Array.isArray(so.childrenAges) && so.childrenAges[i] != null ? String(so.childrenAges[i]) : ''));
+            so.feePercent = so.feePercent === '' || so.feePercent === null || isNaN(Number(so.feePercent)) ? 10 : Number(so.feePercent);
+            if (!SEASON_LABELS[so.season]) so.season = 'moyenne';
+            if (!EXCHANGE_RATES[so.currency]) so.currency = 'MAD';
+            return so;
+        };
+
+        const makeOptionFromCatalog = (item, { season, destination }) => {
+            const prices = item.prices || {};
+            return normalizeOfferOption({
+                uid: offerUid(), source: 'catalog', catalogId: item.id,
+                kind: OFFER_KINDS[item.category] ? item.category : kindFromType(item.type), type: item.type || '',
+                internalName: item.name || '', supplierName: item.supplierName || '', supplierContact: item.supplierContact || '',
+                commercialName: item.commercialName || '', genericLabel: item.genericLabel || '', unitLabel: item.unitLabel || '',
+                neighborhood: item.neighborhood || '', address: item.address || '',
+                city: destination && sameCity(item.city, destination) ? destination : (item.city || destination || ''),
+                surface: item.surface || '', bedding: item.bedding || '', equipments: item.equipments || '', formula: item.formula || '',
+                services: item.services || '', neighborhoodText: item.neighborhoodText || '', highlight: item.highlight || '', remark: item.remark || '',
+                nightlyRate: toNumberOrNull(prices[season]), rateSource: 'catalog',
+                catalogPrices: { basse: Number(prices.basse) || 0, moyenne: Number(prices.moyenne) || 0, haute: Number(prices.haute) || 0 },
+                photos: (item.photos || []).map((p) => ({ ...p, id: offerUid() })),
+                websiteUrl: item.websiteUrl || '', galleryNote: item.galleryNote || '', snapshotAt: new Date().toISOString(),
+            });
+        };
+
+        const findAirportTransfer = (catalog, destination) => {
+            const list = (catalog && catalog.transports) || [];
+            const airport = list.filter((t) => cityKey(t.name).startsWith('aeroport'));
+            return airport.find((t) => destination && cityKey(t.name).includes(cityKey(destination).slice(0, 4))) || null;
+        };
+
+        const createDefaultStayOffer = ({ client, prefill, catalog }) => {
+            const p = prefill || {};
+            const pData = client && client.prospectData ? client.prospectData : null;
+            const destination = p.destination || (pData && pData.dest && cityKey(pData.dest) !== 'maroc' ? pData.dest : '') || '';
+            const pax = toCount(p.pax || (pData && pData.pax) || 2, 1);
+            const airport = findAirportTransfer(catalog, destination);
+            const wantsTransfer = pData && pData.trans ? String(pData.trans).startsWith('Oui') : true;
+            const issuedDate = todayISO();
+            const so = normalizeStayOffer({
+                destination,
+                clientLabel: client ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : '',
+                dateIn: p.dateIn || (pData && pData.dateIn) || '',
+                dateOut: p.dateOut || (pData && pData.dateOut) || '',
+                adults: p.adults != null ? p.adults : pax, children: p.children || 0, childrenAges: p.childrenAges || [],
+                season: p.season || 'moyenne', currency: p.currency || 'MAD',
+                transfer: {
+                    ...DEFAULT_TRANSFER,
+                    enabled: p.transfer ? true : wantsTransfer,
+                    price: p.transfer && p.transfer.price != null ? p.transfer.price : (airport ? airport.price : null),
+                    route: pData && pData.arrivalAirport ? `Aéroport ${pData.arrivalAirport} vers votre hébergement` : (p.transfer && p.transfer.route) || DEFAULT_TRANSFER.route,
+                },
+                issuedDate, reference: makeOfferReference(client, issuedDate),
+            });
+            so.options = (p.catalogIds || [])
+                .map((id) => ((catalog && catalog.accommodations) || []).find((a) => a.id == id))
+                .filter(Boolean)
+                .map((item) => makeOptionFromCatalog(item, { season: so.season, destination: so.destination }));
+            const destRecord = ((catalog && catalog.destinations) || []).find((d) => sameCity(d.name, destination));
+            if (destRecord && destRecord.photo) so.coverPhoto = normalizePhoto({ ...destRecord.photo, id: offerUid() });
+            return so;
+        };
+
+        // Convertit une option de l'offre au format « hébergement » des devis existants.
+        const optionToLegacyAccommodation = (o, so) => {
+            const rate = toNumberOrNull(o.nightlyRate) || 0;
+            return {
+                id: o.catalogId || o.uid, city: o.city || so.destination, name: optionTitle(o), type: o.type || OFFER_KINDS[o.kind].label,
+                supplierName: o.supplierName || o.internalName || '', pricingMode: 'nuit',
+                prices: { basse: rate, moyenne: rate, haute: rate }, season: 'moyenne',
+                nights: nightsBetween(so.dateIn, so.dateOut) || 1,
+                customNote: [so.dateIn && so.dateOut ? `Du ${formatShortDateFR(so.dateIn)} au ${formatShortDateFR(so.dateOut)}` : '', (o.formula || '').trim()].filter(Boolean).join(' · '),
+            };
+        };
+
+        // Devis final : seul l'hébergement retenu (+ transfert s'il est réservé) entre dans le total.
+        const buildFinalQuoteFromOffer = ({ offerQuote, so, option, transferReserved }) => {
+            const nights = nightsBetween(so.dateIn, so.dateOut);
+            const rate = toNumberOrNull(option.nightlyRate);
+            const accomTotal = rate * nights;
+            const transferPrice = transferReserved ? (toNumberOrNull(so.transfer.price) || 0) : 0;
+            const base = accomTotal + transferPrice;
+            const pct = Number(so.feePercent) || 0;
+            const fee = computeFee(base, pct);
+            const tripLabel = TRIP_TYPES[so.transfer.tripType] || 'aller simple';
+            return {
+                id: `DEV-${Date.now().toString().slice(-6)}`,
+                date: new Date().toLocaleDateString('fr-FR'),
+                clientId: offerQuote.clientId,
+                docType: 'devis',
+                quoteCity: so.destination,
+                tripName: `${offerTitle(so)} – ${optionTitle(option)}`,
+                pax: so.adults + so.children, adults: so.adults, children: so.children, childrenAges: so.childrenAges,
+                travelersLabel: travelersLabel(so.adults, so.children, so.childrenAges),
+                currency: so.currency, dateIn: so.dateIn, dateOut: so.dateOut, globalSeason: 'moyenne',
+                accommodations: [optionToLegacyAccommodation(option, so)],
+                activities: [], cars: [],
+                transports: transferReserved ? [{
+                    id: 'offer-transfer', mode: 'Van privé', pricingMode: 'group', quantity: 1, price: transferPrice,
+                    name: `Transfert privé (${tripLabel})${so.transfer.route ? ' – ' + so.transfer.route : ''}`,
+                }] : [],
+                isAutoFee: false, feeMode: 'percent', feePercent: pct, manualFeeMAD: fee,
+                feeComment: `${pct} % du coût total des prestations retenues`,
+                subTotal: base, finalFee: fee, total: base + fee,
+                status: 'Brouillon', sourceOfferId: offerQuote.id, sourceOptionUid: option.uid,
+            };
+        };
+
+        // ---------- Stockage des photos importées ----------
+        // Les photos importées ne sont PAS stockées dans le catalogue ni dans les devis (limite Firestore de 1 Mo
+        // par document) : chacune a son propre document « shared_photos », référencé par « fsphoto:<id> ».
+        const PhotoStore = (() => {
+            const mem = {};
+            const pending = {};
+            const docRef = (id) => window.fbDoc(window.fbDb, 'artifacts', window.fbAppId, 'public', 'data', 'shared_photos', id);
+            const isRef = (src) => typeof src === 'string' && src.startsWith('fsphoto:');
+            const cloudReady = () => !!(window.fbDb && window.fbDoc && window.fbAuth && window.fbAuth.currentUser);
+            const put = async (dataUrl) => {
+                const id = 'ph' + offerUid();
+                mem[id] = dataUrl;
+                let cloud = false;
+                if (cloudReady()) {
+                    try { await window.fbSetDoc(docRef(id), { data: dataUrl, createdAt: Date.now() }); cloud = true; }
+                    catch (e) { console.error('Photo non synchronisée', e); }
+                }
+                if (!cloud) { try { localStorage.setItem('diallo_photo_' + id, dataUrl); } catch (e) { console.error(e); } }
+                return { ref: 'fsphoto:' + id, cloud };
+            };
+            const get = async (ref) => {
+                const id = ref.slice('fsphoto:'.length);
+                if (mem[id]) return mem[id];
+                try { const local = localStorage.getItem('diallo_photo_' + id); if (local) { mem[id] = local; return local; } } catch (e) { /* ignore */ }
+                if (!pending[id]) {
+                    pending[id] = (async () => {
+                        const start = Date.now();
+                        while (!(cloudReady() && window.fbGetDoc) && Date.now() - start < 8000) await new Promise((r) => setTimeout(r, 250));
+                        if (!(cloudReady() && window.fbGetDoc)) throw new Error('Cloud indisponible');
+                        const snap = await window.fbGetDoc(docRef(id));
+                        if (!snap.exists()) throw new Error('Photo introuvable');
+                        mem[id] = snap.data().data;
+                        return mem[id];
+                    })().finally(() => { setTimeout(() => { delete pending[id]; }, 0); });
+                }
+                return pending[id];
+            };
+            return { isRef, put, get, peek: (ref) => (isRef(ref) ? mem[ref.slice('fsphoto:'.length)] : ref) };
+        })();
+
+        function useResolvedPhotoSrc(src) {
+            const initial = () => {
+                if (!src) return { src: '', status: 'empty' };
+                if (!PhotoStore.isRef(src)) return { src, status: 'ok' };
+                const cached = PhotoStore.peek(src);
+                return cached ? { src: cached, status: 'ok' } : { src: '', status: 'loading' };
+            };
+            const [state, setState] = useState(initial);
+            useEffect(() => {
+                let alive = true;
+                const next = initial();
+                setState(next);
+                if (next.status === 'loading') {
+                    PhotoStore.get(src)
+                        .then((data) => { if (alive) setState({ src: data, status: 'ok' }); })
+                        .catch(() => { if (alive) setState({ src: '', status: 'error' }); });
+                }
+                return () => { alive = false; };
+            }, [src]);
+            return state;
+        }
+
+        const compressImageFile = (file, maxDim = 1600) => new Promise((resolve, reject) => {
+            if (!file || !/^image\//.test(file.type)) { reject(new Error('Le fichier choisi n’est pas une image.')); return; }
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('Lecture du fichier impossible.'));
+            reader.onload = () => {
+                const img = new Image();
+                img.onerror = () => reject(new Error('Image illisible.'));
+                img.onload = () => {
+                    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    let q = 0.82;
+                    let out = canvas.toDataURL('image/jpeg', q);
+                    while (out.length > 850000 && q > 0.4) { q -= 0.08; out = canvas.toDataURL('image/jpeg', q); }
+                    resolve(out);
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Attend le chargement de toutes les images d'un conteneur et liste celles qui sont indisponibles.
+        const waitForOfferImages = async (root, timeoutMs = 20000) => {
+            const labelOf = (el) => el.getAttribute('data-label') || 'Photo';
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+                const loading = root.querySelectorAll('[data-img-status="loading"]').length;
+                const incomplete = Array.from(root.querySelectorAll('img[data-offer-img]')).filter((i) => !i.complete).length;
+                if (!loading && !incomplete) break;
+                await new Promise((r) => setTimeout(r, 200));
+            }
+            await new Promise((r) => setTimeout(r, 60)); // laisse React afficher les éventuels remplacements « indisponible »
+            const imgs = Array.from(root.querySelectorAll('img[data-offer-img]'));
+            await Promise.all(imgs.filter((i) => i.complete && i.naturalWidth > 0 && i.decode).map((i) => i.decode().catch(() => null)));
+            const uniq = (arr) => Array.from(new Set(arr));
+            return {
+                broken: uniq([...Array.from(root.querySelectorAll('[data-img-status="error"]')).map(labelOf), ...imgs.filter((i) => i.complete && i.naturalWidth === 0).map(labelOf)]),
+                pending: uniq([...Array.from(root.querySelectorAll('[data-img-status="loading"]')).map(labelOf), ...imgs.filter((i) => !i.complete).map(labelOf)]),
+            };
+        };
+
+        // ---------- Rendu des pages A4 ----------
+        function OfferImg({ src, label, className }) {
+            const resolved = useResolvedPhotoSrc(src);
+            const [failed, setFailed] = useState(false);
+            useEffect(() => { setFailed(false); }, [resolved.src]);
+            if (resolved.status === 'loading') {
+                return <div className="of-photo-missing of-photo-loading" data-img-status="loading" data-label={label}>Chargement de la photo…</div>;
+            }
+            if (resolved.status !== 'ok' || failed || !resolved.src) {
+                return <div className="of-photo-missing" data-img-status="error" data-label={label}><span>Image indisponible</span><small>{label}</small></div>;
+            }
+            return <img src={resolved.src} alt={label} data-offer-img="1" data-label={label} className={className} onError={() => setFailed(true)} />;
+        }
+
+        function OfferLogo({ logoUrl, height }) {
+            const [failed, setFailed] = useState(false);
+            if (logoUrl && !failed) {
+                return <img src={logoUrl} alt="DI’ALLO Conciergerie" style={{ height, width: 'auto', maxWidth: '70mm', objectFit: 'contain', display: 'block' }} onError={() => setFailed(true)} />;
+            }
+            return <div className="of-logo-text" style={{ fontSize: `calc(${height} * 0.55)` }}><span>DI’ALLO</span><small>Conciergerie</small></div>;
+        }
+
+        const PhotoCaption = ({ photo }) => (photo && (photo.caption || photo.illustrative)
+            ? <>{photo.caption}{photo.illustrative && <span className="of-illus">{photo.caption ? ' · ' : ''}Visuel illustratif</span>}</>
+            : null);
+
+        function OfferPhoto({ photo, label, height, overlayCaption, showCaption = true }) {
+            const hasCaption = photo && (photo.caption || photo.illustrative);
+            return (
+                <figure className="of-figure">
+                    <div className="of-photo" style={{ height }}>
+                        {photo && photo.src
+                            ? <OfferImg src={photo.src} label={label + (photo.caption ? ' – ' + photo.caption : '')} />
+                            : <div className="of-photo-empty">Photo à ajouter</div>}
+                        {overlayCaption && hasCaption && <div className="of-photo-band"><PhotoCaption photo={photo} /></div>}
+                    </div>
+                    {!overlayCaption && showCaption && hasCaption && <figcaption className="of-caption"><PhotoCaption photo={photo} /></figcaption>}
+                </figure>
+            );
+        }
+
+        function buildOfferViewModel(so, { client, logoUrl }) {
+            const nights = nightsBetween(so.dateIn, so.dateOut);
+            const currency = so.currency || 'MAD';
+            const money = (v) => formatOfferAmount(v, currency);
+            const dest = (so.destination || '').trim();
+            const clientLabel = (so.clientLabel || '').trim() || (client ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : '');
+            const ordered = sortOfferOptions(so.options);
+            const options = ordered.map((o, i) => {
+                const rate = toNumberOrNull(o.nightlyRate);
+                const total = optionTotal(o, nights);
+                const anyIllustrative = o.photos.some((p) => p.illustrative);
+                return {
+                    ...o, n: i + 1, count: ordered.length,
+                    title: optionTitle(o), subtitle: optionSubtitle(o), locationLine: optionLocationLine(o, dest), summaryLabel: optionSummaryLabel(o),
+                    rate, total,
+                    totalText: total !== null ? money(total) : 'Sur demande',
+                    rateText: rate !== null ? `${money(rate)} par nuit${o.rateNote ? ' · ' + o.rateNote : ''}.` : `Tarif sur demande${o.rateNote ? ' · ' + o.rateNote : ''}.`,
+                    infoItems: optionInfoItems(o), mainPhoto: o.photos[0] || null, gallery: o.photos.slice(1),
+                    galleryText: (o.galleryNote || '').trim() || (anyIllustrative ? 'Les photos marquées « Visuel illustratif » montrent un autre logement ou un espace commun de la résidence.' : ''),
+                };
+            });
+            const pages = [{ type: 'cover' }];
+            options.forEach((o) => {
+                pages.push({ type: 'detail', option: o });
+                for (let i = 0; i < o.gallery.length; i += 5) pages.push({ type: 'gallery', option: o, photos: o.gallery.slice(i, i + 5), part: i / 5, last: i + 5 >= o.gallery.length });
+            });
+            const hasLoc = options.some((o) => offerGroup(o.kind) === 'location');
+            const hasHotel = options.some((o) => offerGroup(o.kind) !== 'location');
+            const recapRows = options.length + (hasLoc ? 1 : 0) + (hasHotel ? 1 : 0);
+            if (recapRows > 8) { pages.push({ type: 'recap', part: 'table' }); pages.push({ type: 'recap', part: 'details' }); }
+            else pages.push({ type: 'recap', part: 'all' });
+            pages.push({ type: 'closing' });
+            return {
+                so, nights, currency, money, dest, clientLabel, options, pages, totalPages: pages.length, logoUrl,
+                title: offerTitle(so), intro: offerIntro(so), travelers: travelersLabel(so.adults, so.children, so.childrenAges),
+                stayRange: formatStayRange(so.dateIn, so.dateOut), issued: formatLongDateFR(so.issuedDate || todayISO()), reference: so.reference,
+                cover: so.coverPhoto, closing: so.closingSameAsCover ? so.coverPhoto : so.closingPhoto,
+                footerLabel: `Offre de séjour${clientLabel ? ' • ' + clientLabel : ''}`,
+            };
+        }
+
+        function OfferPageShell({ vm, index, kicker, footer, children }) {
+            const pageNo = `${pad2(index + 1)} / ${pad2(vm.totalPages)}`;
+            return (
+                <section className="offer-page" data-page={index + 1}>
+                    <div className="of-inner">
+                        {kicker && <div className="of-kicker">{kicker}</div>}
+                        <div className="of-content">{children}</div>
+                        <div className="of-footer">
+                            {footer === 'cover' && <>
+                                <span style={{ textTransform: 'none', letterSpacing: 0 }}>Proposition du {vm.issued}{vm.reference ? ` · Réf. ${vm.reference}` : ''}</span>
+                                <span className="of-pageno">{pageNo}</span>
+                            </>}
+                            {footer === 'closing' && <>
+                                <span className="of-footer-center" style={{ textAlign: 'left' }}>{COMPANY_INFO.website}</span>
+                                <span className="of-pageno">{pageNo}</span>
+                            </>}
+                            {footer === 'standard' && <>
+                                <span className="of-footer-left"><OfferLogo logoUrl={vm.logoUrl} height="6.5mm" /></span>
+                                <span className="of-footer-center">{vm.footerLabel}</span>
+                                <span className="of-pageno">{pageNo}</span>
+                            </>}
+                        </div>
+                    </div>
+                </section>
+            );
+        }
+
+        function OfferCoverPage({ vm, index }) {
+            return (
+                <OfferPageShell vm={vm} index={index} footer="cover">
+                    <div style={{ flex: '0 0 auto' }}><OfferLogo logoUrl={vm.logoUrl} height="19mm" /></div>
+                    <div className="of-kicker" style={{ marginTop: '9mm', marginBottom: '3mm' }}>Offre de séjour</div>
+                    <h1 className="of-h1 of-cover-title">{vm.title}</h1>
+                    {vm.clientLabel && <p className="of-cover-for">Pour {vm.clientLabel}</p>}
+                    <div className="of-cover-meta">
+                        <strong>{vm.stayRange || 'Dates à préciser'}</strong>
+                        <span>{nightsLabel(vm.nights)} · {vm.travelers}</span>
+                    </div>
+                    {vm.intro && <p className="of-cover-intro">{vm.intro}</p>}
+                    <p className="of-availability">Offre sous réserve de disponibilité.</p>
+                    <div className="of-cover-photo"><OfferPhoto photo={vm.cover} label="Photo de couverture" overlayCaption /></div>
+                </OfferPageShell>
+            );
+        }
+
+        function OfferDetailPage({ vm, index, option: o }) {
+            const kicker = `${OFFER_KINDS[o.kind].kicker} · ${pad2(o.n)} / ${pad2(o.count)} · Détails du séjour`;
+            return (
+                <OfferPageShell vm={vm} index={index} kicker={kicker} footer="standard">
+                    <h1 className="of-h1">{o.title}</h1>
+                    <p className="of-sub">{o.subtitle}</p>
+                    {o.locationLine && <p className="of-loc">{o.locationLine}</p>}
+                    <div className="of-pricebox">
+                        <div className="of-pricebox-label">Tarif hébergement · {nightsLabel(vm.nights)}</div>
+                        <div className={'of-pricebox-total' + (o.total === null ? ' of-ondemand' : '')}>{o.totalText}</div>
+                        <div className="of-pricebox-rate">{o.rateText}</div>
+                    </div>
+                    <div className="of-flexphoto"><OfferPhoto photo={o.mainPhoto} label={o.title} /></div>
+                    {o.infoItems.length > 0 && (
+                        <div className="of-grid2">
+                            {o.infoItems.map(([label, text]) => <div key={label}><div className="of-label">{label}</div><div className="of-text">{text}</div></div>)}
+                        </div>
+                    )}
+                    {(o.highlight || o.remark) && (
+                        <div className="of-note">
+                            <div className="of-label">Pour vos vacances</div>
+                            {o.highlight && <p>{o.highlight}</p>}
+                            {o.remark && <p className="of-note-small">{o.remark}</p>}
+                        </div>
+                    )}
+                    {o.gallery.length === 0 && o.websiteUrl && <p style={{ marginTop: '3mm' }}><a className="of-link" href={o.websiteUrl}>Voir le site de l’établissement</a></p>}
+                </OfferPageShell>
+            );
+        }
+
+        function OfferGalleryPage({ vm, index, option: o, photos, part, last }) {
+            const kicker = `${OFFER_KINDS[o.kind].kicker} · ${pad2(o.n)} / ${pad2(o.count)} · Galerie photos${part > 0 ? ' (suite)' : ''}`;
+            return (
+                <OfferPageShell vm={vm} index={index} kicker={kicker} footer="standard">
+                    <h1 className="of-h1">{o.title}</h1>
+                    <p className="of-sub" style={{ marginBottom: '4mm' }}>{o.subtitle}</p>
+                    {photos[0] && <OfferPhoto photo={photos[0]} label={o.title} height={photos.length === 1 ? '150mm' : '78mm'} />}
+                    {photos.length > 1 && (
+                        <div className="of-gallery-grid">
+                            {photos.slice(1).map((p) => <OfferPhoto key={p.id} photo={p} label={o.title} height="50mm" />)}
+                        </div>
+                    )}
+                    {last && o.galleryText && <p className="of-small" style={{ marginTop: '4mm', borderTop: '0.3mm solid var(--of-line)', paddingTop: '2.5mm' }}>{o.galleryText}</p>}
+                    {last && o.websiteUrl && <p style={{ marginTop: '2.5mm' }}><a className="of-link" href={o.websiteUrl}>Voir le site et la galerie{o.commercialName ? ' de ' + o.commercialName : ''}</a></p>}
+                </OfferPageShell>
+            );
+        }
+
+        function OfferRecapTable({ vm }) {
+            const locs = vm.options.filter((o) => offerGroup(o.kind) === 'location');
+            const hotels = vm.options.filter((o) => offerGroup(o.kind) !== 'location');
+            const row = (o) => (
+                <tr key={o.uid}>
+                    <td><span className="of-row-n">{pad2(o.n)}</span>{o.summaryLabel}</td>
+                    <td className={'r' + (o.total === null ? ' of-ondemand' : '')}>{o.totalText}</td>
+                </tr>
+            );
+            const currencyNote = vm.currency === 'MAD' ? 'Tarifs en dirhams marocains (DH)' : `Tarifs indicatifs en ${vm.currency === 'EUR' ? 'euros' : vm.currency}, convertis depuis nos tarifs en dirhams`;
+            return (
+                <>
+                    <h1 className="of-h1">Le budget de votre séjour</h1>
+                    <p className="of-loc">{nightsLabel(vm.nights)}{vm.dest ? ' ' + cityPrep(vm.dest) : ''} · {vm.travelers}</p>
+                    <table className="of-table">
+                        <thead><tr><th>Hébergement et formule · au choix</th><th className="r">Tarif pour {nightsLabel(vm.nights)}</th></tr></thead>
+                        <tbody>
+                            {locs.length > 0 && <tr className="of-group"><td colSpan="2">Locations courte durée</td></tr>}
+                            {locs.map(row)}
+                            {hotels.length > 0 && <tr className="of-group"><td colSpan="2">Hôtels et appart’hôtels</td></tr>}
+                            {hotels.map(row)}
+                            {vm.options.length === 0 && <tr><td colSpan="2" className="of-ondemand">Aucun hébergement sélectionné.</td></tr>}
+                        </tbody>
+                    </table>
+                    <p className="of-small" style={{ marginTop: '2.5mm' }}>
+                        Les hébergements sont proposés au choix : seul l’hébergement retenu sera réservé et facturé. {currencyNote}, sous réserve des conditions d’occupation applicables.
+                    </p>
+                    <p className="of-availability" style={{ marginTop: '1.5mm' }}>Offre sous réserve de disponibilité.</p>
+                </>
+            );
+        }
+
+        function OfferRecapDetails({ vm }) {
+            const t = vm.so.transfer;
+            const pct = String(vm.so.feePercent).replace('.', ',');
+            const routeText = (t.route || '').trim();
+            return (
+                <>
+                    <div className="of-feebox">
+                        <div className="of-label">Honoraires DI’ALLO Conciergerie</div>
+                        <p>Les honoraires de conciergerie sont facturés séparément et correspondent à {pct} % du coût total des prestations retenues pour le voyage{t.enabled ? ', transfert compris si vous le réservez' : ''}.</p>
+                    </div>
+                    {t.enabled && (
+                        <div className="of-transfer">
+                            {t.photo && t.photo.src && <div className="of-transfer-photo"><OfferPhoto photo={t.photo} label="Transfert" showCaption={false} /></div>}
+                            <div style={{ flex: 1 }}>
+                                <span className="of-optional">En option</span>
+                                <h3 className="of-h3">Votre transfert privé</h3>
+                                <div className="of-transfer-price">{t.price ? vm.money(t.price) : 'Sur demande'} · {TRIP_TYPES[t.tripType] || 'aller simple'}</div>
+                                <p>{routeText}{routeText && !/[.!?]$/.test(routeText) ? '. ' : ' '}{t.description}</p>
+                            </div>
+                        </div>
+                    )}
+                    <h3 className="of-h3" style={{ marginTop: '5mm' }}>Pour confirmer votre réservation</h3>
+                    <p className="of-text">{vm.so.confirmText}</p>
+                    <p className="of-small" style={{ marginTop: '3mm' }}>{vm.so.conditionsText}</p>
+                    <div className="of-contact">
+                        <div>
+                            <strong>{COMPANY_INFO.name}</strong><br />
+                            {COMPANY_INFO.phones.join(' · ')}<br />
+                            {COMPANY_INFO.email}
+                        </div>
+                        <div style={{ color: 'var(--of-brown)', fontWeight: 700 }}>{COMPANY_INFO.website}</div>
+                    </div>
+                </>
+            );
+        }
+
+        function OfferRecapPage({ vm, index, part }) {
+            return (
+                <OfferPageShell vm={vm} index={index} kicker={part === 'details' ? 'Récapitulatif du séjour (suite)' : 'Récapitulatif du séjour'} footer="standard">
+                    {part !== 'details' && <OfferRecapTable vm={vm} />}
+                    {part === 'details' && <h1 className="of-h1">Honoraires, transfert et réservation</h1>}
+                    {part !== 'table' && <OfferRecapDetails vm={vm} />}
+                </OfferPageShell>
+            );
+        }
+
+        function OfferClosingPage({ vm, index }) {
+            const c = vm.closing;
+            return (
+                <OfferPageShell vm={vm} index={index} footer="closing">
+                    <OfferPhoto photo={c} label="Photo de fin" height="140mm" showCaption={false} />
+                    {c && (c.caption || c.credit) && <p className="of-caption" style={{ textAlign: 'right' }}>{[c.caption, c.credit].filter(Boolean).join(' · ')}</p>}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12mm' }}><OfferLogo logoUrl={vm.logoUrl} height="22mm" /></div>
+                    <div className="of-gold-rule"></div>
+                    <p className="of-slogan">Profitez de votre séjour,<br /><em>on s’occupe du reste.</em></p>
+                </OfferPageShell>
+            );
+        }
+
+        function StayOfferPages({ vm }) {
+            return (
+                <>
+                    {vm.pages.map((p, i) => {
+                        if (p.type === 'cover') return <OfferCoverPage key={i} vm={vm} index={i} />;
+                        if (p.type === 'detail') return <OfferDetailPage key={i} vm={vm} index={i} option={p.option} />;
+                        if (p.type === 'gallery') return <OfferGalleryPage key={i} vm={vm} index={i} option={p.option} photos={p.photos} part={p.part} last={p.last} />;
+                        if (p.type === 'recap') return <OfferRecapPage key={i} vm={vm} index={i} part={p.part} />;
+                        return <OfferClosingPage key={i} vm={vm} index={i} />;
+                    })}
+                </>
+            );
+        }
+
+        // ---------- Aperçu et export PDF ----------
+        function StayOfferPreviewModal({ vm, fileName, warnings, onClose }) {
+            const portalEl = useMemo(() => {
+                let el = document.getElementById('offer-print-portal');
+                if (!el) { el = document.createElement('div'); el.id = 'offer-print-portal'; document.body.appendChild(el); }
+                return el;
+            }, []);
+            const previewRef = useRef(null);
+            const [zoom, setZoom] = useState(() => Math.max(0.35, Math.min(1, (window.innerWidth - 48) / 820)));
+            const [overflowPages, setOverflowPages] = useState([]);
+            const [exportState, setExportState] = useState(null);
+
+            // Détecte les pages dont le contenu dépasse (texte trop long) pour éviter un PDF tronqué.
+            useEffect(() => {
+                const check = () => {
+                    if (!previewRef.current) return;
+                    const found = [];
+                    previewRef.current.querySelectorAll('.offer-page').forEach((page) => {
+                        const c = page.querySelector('.of-content');
+                        const over = c && c.scrollHeight > c.clientHeight + 2;
+                        page.setAttribute('data-overflow', over ? '1' : '0');
+                        if (over) found.push(page.getAttribute('data-page'));
+                    });
+                    setOverflowPages((prev) => (prev.join(',') === found.join(',') ? prev : found));
+                };
+                check();
+                const t = setInterval(check, 800);
+                return () => clearInterval(t);
+            }, [vm]);
+
+            const doPrint = () => {
+                const prevTitle = document.title;
+                let done = false;
+                const cleanup = () => {
+                    if (done) return;
+                    done = true;
+                    document.body.classList.remove('printing-offer');
+                    document.title = prevTitle;
+                    window.removeEventListener('afterprint', cleanup);
+                };
+                document.body.classList.add('printing-offer');
+                document.title = fileName;
+                window.addEventListener('afterprint', cleanup);
+                setTimeout(() => {
+                    window.print();
+                    // Filet de sécurité pour les navigateurs qui n'émettent pas « afterprint ».
+                    setTimeout(() => { window.addEventListener('mousedown', cleanup, { once: true }); window.addEventListener('keydown', cleanup, { once: true }); }, 1000);
+                }, 50);
+            };
+
+            const startExport = async () => {
+                setExportState({ phase: 'loading' });
+                const res = await waitForOfferImages(portalEl, 20000);
+                if (res.broken.length || res.pending.length) { setExportState({ phase: 'issues', ...res }); return; }
+                setExportState(null);
+                doPrint();
+            };
+
+            return (
+                <div className="fixed inset-0 z-[70] bg-slate-900/90 flex flex-col no-print">
+                    <div className="bg-slate-900 text-white px-4 py-3 flex flex-wrap items-center gap-3 border-b border-slate-700 shrink-0">
+                        <div className="flex items-center gap-2 mr-auto">
+                            <i className="ph ph-file-pdf text-2xl text-amber-500"></i>
+                            <div>
+                                <p className="font-black leading-tight">Aperçu de l’offre — {vm.totalPages} pages A4</p>
+                                <p className="text-xs text-slate-400">{fileName}.pdf</p>
+                            </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-slate-300">Zoom
+                            <input type="range" min="0.3" max="1.2" step="0.05" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} className="accent-amber-500" />
+                        </label>
+                        <button onClick={startExport} disabled={exportState && exportState.phase === 'loading'} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg flex items-center gap-2 disabled:opacity-60">
+                            {exportState && exportState.phase === 'loading' ? <><i className="ph ph-spinner animate-spin"></i> Chargement des photos…</> : <><i className="ph ph-download-simple"></i> Exporter en PDF</>}
+                        </button>
+                        <button onClick={onClose} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg font-medium">Fermer</button>
+                    </div>
+
+                    {(overflowPages.length > 0 || warnings.length > 0) && (
+                        <div className="bg-amber-50 text-amber-900 text-xs px-4 py-2 border-b border-amber-200 max-h-28 overflow-y-auto shrink-0">
+                            {overflowPages.length > 0 && <p className="font-bold text-red-700"><i className="ph ph-warning"></i> Texte trop long : la fin du contenu est coupée page {overflowPages.join(', ')} (encadré rouge). Raccourcissez les descriptions concernées.</p>}
+                            {warnings.map((w, i) => <p key={i}><i className="ph ph-info"></i> {w}</p>)}
+                        </div>
+                    )}
+
+                    {exportState && exportState.phase === 'issues' && (
+                        <div className="bg-red-50 border-b border-red-200 px-4 py-3 text-sm text-red-800 shrink-0">
+                            <p className="font-black mb-1"><i className="ph ph-image-broken"></i> Certaines images ne peuvent pas être chargées :</p>
+                            <ul className="list-disc pl-6 text-xs space-y-0.5 max-h-24 overflow-y-auto">
+                                {exportState.broken.map((l) => <li key={'b' + l}>{l} — <strong>image indisponible</strong> (lien invalide, site qui bloque l’affichage ou fichier supprimé)</li>)}
+                                {exportState.pending.map((l) => <li key={'p' + l}>{l} — <strong>chargement trop long</strong></li>)}
+                            </ul>
+                            <p className="text-xs mt-1">Elles apparaîtront comme « Image indisponible » dans le PDF. Remplacez-les (de préférence par une photo importée) ou exportez quand même.</p>
+                            <div className="flex gap-2 mt-2">
+                                <button onClick={() => { setExportState(null); doPrint(); }} className="px-3 py-1.5 bg-red-600 text-white rounded-lg font-bold text-xs">Exporter quand même</button>
+                                <button onClick={() => setExportState(null)} className="px-3 py-1.5 bg-white border border-red-300 rounded-lg font-bold text-xs">Corriger d’abord</button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-auto py-6 px-2 bg-slate-700/60">
+                        <p className="text-center text-slate-300 text-xs mb-4">Dans la fenêtre d’impression, choisissez « Enregistrer au format PDF », format A4, marges « Aucune », et activez « Graphiques d’arrière-plan ».</p>
+                        <div ref={previewRef} className="of-preview" style={{ zoom }}>
+                            <StayOfferPages vm={vm} />
+                        </div>
+                    </div>
+                    {ReactDOM.createPortal(<StayOfferPages vm={vm} />, portalEl)}
+                </div>
+            );
+        }
+
+        // ---------- Formulaires photos ----------
+        const ofInput = 'w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-500 focus:bg-white';
+
+        function OfField({ label, hint, children, className }) {
+            return (
+                <div className={className}>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">{label}</label>
+                    {children}
+                    {hint && <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{hint}</p>}
+                </div>
+            );
+        }
+
+        function AddPhotoForm({ onAdd, buttonLabel }) {
+            const [open, setOpen] = useState(false);
+            const [url, setUrl] = useState('');
+            const [caption, setCaption] = useState('');
+            const [illustrative, setIllustrative] = useState(false);
+            const [validated, setValidated] = useState(false);
+            const [authorized, setAuthorized] = useState(false);
+            const [busy, setBusy] = useState(false);
+            const [msg, setMsg] = useState('');
+            const reset = () => { setUrl(''); setCaption(''); setIllustrative(false); setValidated(false); setAuthorized(false); };
+            const add = (src) => {
+                onAdd(normalizePhoto({ id: offerUid(), src, caption: caption.trim(), illustrative, captionValidated: validated && !!caption.trim(), authorized: true }));
+                reset();
+                setOpen(false);
+            };
+            const addUrl = () => {
+                const u = url.trim();
+                if (!/^(https?:|data:image\/)/i.test(u)) { setMsg('Collez un lien complet commençant par https://'); return; }
+                if (!authorized) { setMsg('Cochez « Photo autorisée » pour confirmer les droits de diffusion.'); return; }
+                setMsg('');
+                add(u);
+            };
+            const onFile = async (e) => {
+                const f = e.target.files && e.target.files[0];
+                e.target.value = '';
+                if (!f) return;
+                if (!authorized) { setMsg('Cochez « Photo autorisée » avant d’importer le fichier.'); return; }
+                setBusy(true); setMsg('');
+                try {
+                    const dataUrl = await compressImageFile(f);
+                    const res = await PhotoStore.put(dataUrl);
+                    add(res.ref);
+                    if (!res.cloud) setMsg('Photo enregistrée sur cet appareil uniquement (cloud indisponible). Pour la retrouver sur vos autres appareils, utilisez plutôt un lien.');
+                } catch (err) { setMsg('Import impossible : ' + err.message); }
+                finally { setBusy(false); }
+            };
+            if (!open) {
+                return (
+                    <div className="mt-2">
+                        <button type="button" onClick={() => { setOpen(true); setMsg(''); }} className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg hover:bg-amber-100"><i className="ph ph-plus"></i> {buttonLabel || 'Ajouter une photo'}</button>
+                        {msg && <p className="text-[11px] text-amber-700 mt-1">{msg}</p>}
+                    </div>
+                );
+            }
+            return (
+                <div className="mt-2 p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-2">
+                    <div className="flex gap-2">
+                        <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Lien de la photo (https://…)" className={ofInput} />
+                        <button type="button" onClick={addUrl} className="px-3 bg-slate-900 text-white rounded-lg text-xs font-bold shrink-0">Ajouter le lien</button>
+                    </div>
+                    <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Légende (ex. Séjour, Chambre, Façade de l’hôtel)" className={ofInput} />
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-700">
+                        <label className="flex items-center gap-1"><input type="checkbox" checked={validated} onChange={(e) => setValidated(e.target.checked)} className="accent-amber-500" /> Légende validée</label>
+                        <label className="flex items-center gap-1"><input type="checkbox" checked={illustrative} onChange={(e) => setIllustrative(e.target.checked)} className="accent-amber-500" /> Visuel illustratif (autre logement)</label>
+                        <label className="flex items-center gap-1 font-bold"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} className="accent-amber-500" /> Photo autorisée à la diffusion</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className={`cursor-pointer text-xs font-bold px-3 py-1.5 rounded-lg ${busy ? 'bg-slate-200 text-slate-500' : 'bg-white border border-slate-300 hover:bg-slate-100'}`}>
+                            <i className="ph ph-upload-simple"></i> {busy ? 'Import…' : 'Importer un fichier'}
+                            <input type="file" accept="image/*" className="hidden" onChange={onFile} disabled={busy} />
+                        </label>
+                        <button type="button" onClick={() => { setOpen(false); reset(); setMsg(''); }} className="text-xs text-slate-500 ml-auto">Annuler</button>
+                    </div>
+                    {msg && <p className="text-[11px] text-red-600">{msg}</p>}
+                </div>
+            );
+        }
+
+        function PhotoListEditor({ photos, onChange, label }) {
+            const list = photos || [];
+            const patch = (i, p) => onChange(list.map((ph, k) => (k === i ? { ...ph, ...p } : ph)));
+            const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; const next = [...list]; [next[i], next[j]] = [next[j], next[i]]; onChange(next); };
+            const setMain = (i) => { const next = [...list]; const [p] = next.splice(i, 1); onChange([p, ...next]); };
+            const remove = (i) => onChange(list.filter((_, k) => k !== i));
+            return (
+                <div>
+                    {list.length === 0 && <p className="text-xs text-slate-400 italic">Aucune photo pour cet hébergement.</p>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {list.map((ph, i) => (
+                            <div key={ph.id} className={`rounded-xl p-2 bg-white border ${i === 0 ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-200'}`}>
+                                <div className="relative h-28 rounded-lg overflow-hidden bg-slate-100 of-thumb">
+                                    <OfferImg src={ph.src} label={`${label}${ph.caption ? ' – ' + ph.caption : ''}`} />
+                                    {i === 0 && <span className="absolute top-1 left-1 bg-amber-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded">PRINCIPALE</span>}
+                                    {ph.illustrative && <span className="absolute bottom-1 left-1 bg-slate-900/80 text-white text-[10px] px-2 py-0.5 rounded">Visuel illustratif</span>}
+                                </div>
+                                <input type="text" value={ph.caption} onChange={(e) => patch(i, { caption: e.target.value, captionValidated: false })} placeholder="Légende" className="w-full mt-2 p-1.5 border border-slate-200 rounded text-xs" />
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-slate-600">
+                                    <label className="flex items-center gap-1"><input type="checkbox" checked={ph.captionValidated} onChange={(e) => patch(i, { captionValidated: e.target.checked })} className="accent-amber-500" /> Légende validée</label>
+                                    <label className="flex items-center gap-1"><input type="checkbox" checked={ph.illustrative} onChange={(e) => patch(i, { illustrative: e.target.checked })} className="accent-amber-500" /> Illustratif</label>
+                                    <label className="flex items-center gap-1"><input type="checkbox" checked={ph.authorized} onChange={(e) => patch(i, { authorized: e.target.checked })} className="accent-amber-500" /> Autorisée</label>
+                                </div>
+                                <div className="flex gap-1 mt-1.5 justify-end text-slate-500">
+                                    {i !== 0 && <button type="button" title="Photo principale" onClick={() => setMain(i)} className="px-1.5 hover:text-amber-600"><i className="ph ph-star"></i></button>}
+                                    <button type="button" title="Avancer" onClick={() => move(i, -1)} disabled={i === 0} className="px-1.5 hover:text-slate-900 disabled:opacity-30"><i className="ph ph-arrow-left"></i></button>
+                                    <button type="button" title="Reculer" onClick={() => move(i, 1)} disabled={i === list.length - 1} className="px-1.5 hover:text-slate-900 disabled:opacity-30"><i className="ph ph-arrow-right"></i></button>
+                                    <button type="button" title="Retirer" onClick={() => remove(i)} className="px-1.5 text-red-400 hover:text-red-600"><i className="ph ph-trash"></i></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <AddPhotoForm onAdd={(p) => onChange([...list, p])} />
+                </div>
+            );
+        }
+
+        function SinglePhotoField({ photo, onChange, label, withCredit }) {
+            if (!photo) return <AddPhotoForm onAdd={onChange} buttonLabel={`Choisir ${label.toLowerCase()}`} />;
+            return (
+                <div className="flex gap-3 items-start">
+                    <div className="relative w-36 h-24 rounded-lg overflow-hidden bg-slate-100 of-thumb shrink-0"><OfferImg src={photo.src} label={label} /></div>
+                    <div className="flex-1 space-y-1.5">
+                        <input type="text" value={photo.caption} onChange={(e) => onChange({ ...photo, caption: e.target.value, captionValidated: false })} placeholder="Légende (ex. Mosquée Hassan II, Casablanca)" className={ofInput} />
+                        {withCredit && <input type="text" value={photo.credit || ''} onChange={(e) => onChange({ ...photo, credit: e.target.value })} placeholder="Crédit photo (ex. Photo de …)" className={ofInput} />}
+                        <div className="flex flex-wrap gap-x-3 text-[11px] text-slate-600 items-center">
+                            <label className="flex items-center gap-1"><input type="checkbox" checked={photo.captionValidated} onChange={(e) => onChange({ ...photo, captionValidated: e.target.checked })} className="accent-amber-500" /> Légende validée</label>
+                            <label className="flex items-center gap-1"><input type="checkbox" checked={photo.authorized} onChange={(e) => onChange({ ...photo, authorized: e.target.checked })} className="accent-amber-500" /> Autorisée</label>
+                            <button type="button" onClick={() => onChange(null)} className="ml-auto text-red-500 font-bold"><i className="ph ph-trash"></i> Retirer</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function CatalogAccomPicker({ catalog, destination, onAdd, onClose, existingCatalogIds }) {
+            const [showAll, setShowAll] = useState(!destination);
+            const [selected, setSelected] = useState([]);
+            const [search, setSearch] = useState('');
+            const all = catalog.accommodations || [];
+            const list = all
+                .filter((a) => showAll || sameCity(a.city, destination))
+                .filter((a) => !search || cityKey([a.name, a.commercialName, a.neighborhood, a.city, a.type].join(' ')).includes(cityKey(search)));
+            const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 z-[65] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+                        <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+                            <h3 className="font-bold"><i className="ph ph-buildings text-amber-500"></i> Hébergements du catalogue {!showAll && destination ? `· ${destination}` : ''}</h3>
+                            <button onClick={onClose}><i className="ph ph-x text-xl"></i></button>
+                        </div>
+                        <div className="p-3 border-b flex flex-wrap gap-3 items-center">
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher (nom, quartier, type…)" className={ofInput + ' flex-1 min-w-[180px]'} />
+                            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="accent-amber-500" /> Toutes les villes</label>
+                        </div>
+                        <div className="flex-1 overflow-y-auto divide-y">
+                            {list.length === 0 && <p className="p-6 text-center text-sm text-slate-500">Aucun hébergement {showAll ? '' : `pour « ${destination} »`} dans le catalogue. Cochez « Toutes les villes » ou ajoutez un hébergement hors catalogue.</p>}
+                            {list.map((a) => {
+                                const kind = OFFER_KINDS[a.category] ? a.category : kindFromType(a.type);
+                                const photos = (a.photos || []).length;
+                                return (
+                                    <label key={a.id} className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-amber-50 ${selected.includes(a.id) ? 'bg-amber-50' : ''}`}>
+                                        <input type="checkbox" checked={selected.includes(a.id)} onChange={() => toggle(a.id)} className="accent-amber-500 w-4 h-4" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm truncate">{a.commercialName || a.name} <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded ml-1">{OFFER_KINDS[kind].label}</span></p>
+                                            <p className="text-xs text-slate-500 truncate">{a.city}{a.neighborhood ? ' · ' + a.neighborhood : ''} · Interne : {a.name}{a.supplierName ? ' · Fournisseur : ' + a.supplierName : ''}</p>
+                                        </div>
+                                        <div className="text-right text-xs shrink-0">
+                                            <p className="font-mono">{(a.prices && a.prices.basse) || 0} / {(a.prices && a.prices.moyenne) || 0} / {(a.prices && a.prices.haute) || 0}</p>
+                                            <p className={photos ? 'text-emerald-600' : 'text-slate-400'}><i className="ph ph-camera"></i> {photos} photo{photos > 1 ? 's' : ''}{existingCatalogIds.includes(a.id) ? ' · déjà ajouté' : ''}</p>
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <div className="p-3 border-t flex justify-end gap-2 bg-slate-50">
+                            <button onClick={onClose} className="px-4 py-2 rounded-lg bg-white border font-medium text-sm">Annuler</button>
+                            <button disabled={!selected.length} onClick={() => onAdd(selected.map((id) => all.find((a) => a.id === id)).filter(Boolean))} className="px-4 py-2 rounded-lg bg-amber-500 font-bold text-sm disabled:opacity-50">Ajouter {selected.length ? `(${selected.length})` : ''}</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function OfferOptionEditor({ option: o, index, groupCount, groupIndex, nights, so, open, onToggle, onChange, onMove, onRemove, onDuplicate, onResetFromCatalog, currency }) {
+            const set = (k) => (e) => onChange({ [k]: e.target.value });
+            const rate = toNumberOrNull(o.nightlyRate);
+            const total = optionTotal(o, nights);
+            const catalogRate = o.catalogPrices ? Number(o.catalogPrices[so.season]) || 0 : null;
+            return (
+                <div className={`rounded-2xl border ${open ? 'border-amber-300 shadow-md' : 'border-slate-200'} bg-white overflow-hidden`}>
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 cursor-pointer" onClick={onToggle}>
+                        <span className="w-8 h-8 rounded-lg bg-slate-900 text-amber-400 font-black flex items-center justify-center text-sm shrink-0">{pad2(index)}</span>
+                        <div className="relative w-14 h-10 rounded overflow-hidden bg-slate-200 of-thumb shrink-0">{o.photos[0] ? <OfferImg src={o.photos[0].src} label={optionTitle(o)} /> : <i className="ph ph-image text-slate-400 absolute inset-0 m-auto w-5 h-5"></i>}</div>
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm truncate">{optionTitle(o)}</p>
+                            <p className="text-[11px] text-slate-500 truncate">
+                                <span className="font-bold uppercase">{OFFER_KINDS[o.kind].label}</span>
+                                {(o.supplierName || o.internalName) && <span> · Interne : {o.supplierName || o.internalName}</span>}
+                                {' · '}{o.photos.length} photo{o.photos.length > 1 ? 's' : ''}
+                            </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                            <p className="font-black text-sm">{total !== null ? formatOfferAmount(total, currency) : <span className="italic text-slate-400 font-medium">Sur demande</span>}</p>
+                            <p className="text-[11px] text-slate-500">{rate !== null ? `${formatOfferAmount(rate, currency)} / nuit` : 'tarif non renseigné'}</p>
+                        </div>
+                        <div className="flex flex-col shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <button title="Monter" disabled={groupIndex === 0} onClick={() => onMove(-1)} className="px-1 text-slate-500 hover:text-slate-900 disabled:opacity-25"><i className="ph ph-caret-up"></i></button>
+                            <button title="Descendre" disabled={groupIndex === groupCount - 1} onClick={() => onMove(1)} className="px-1 text-slate-500 hover:text-slate-900 disabled:opacity-25"><i className="ph ph-caret-down"></i></button>
+                        </div>
+                        <button title="Retirer de l’offre" onClick={(e) => { e.stopPropagation(); if (window.confirm('Retirer cette option de l’offre ?')) onRemove(); }} className="text-red-400 hover:text-red-600 shrink-0"><i className="ph ph-trash text-lg"></i></button>
+                    </div>
+
+                    {open && (
+                        <div className="p-4 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <OfField label="Catégorie">
+                                    <select value={o.kind} onChange={set('kind')} className={ofInput}>
+                                        <option value="location">Location privée</option>
+                                        <option value="hotel">Hôtel</option>
+                                        <option value="apparthotel">Appart’hôtel</option>
+                                    </select>
+                                </OfField>
+                                <OfField label="Type de logement">
+                                    <input list="of-accom-types" value={o.type} onChange={set('type')} className={ofInput} />
+                                </OfField>
+                                <OfField label="Fournisseur (interne)" hint="Jamais imprimé dans le PDF." className="md:col-span-2">
+                                    <input value={o.supplierName} onChange={set('supplierName')} placeholder={o.internalName || 'Propriétaire, agence, hôtel…'} className={ofInput + ' bg-purple-50 border-purple-200'} />
+                                </OfField>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {o.kind !== 'location' && (
+                                    <OfField label="Nom commercial de l’hôtel">
+                                        <input value={o.commercialName} onChange={set('commercialName')} placeholder="Ex. ONOMO Casablanca City Center" className={ofInput} />
+                                    </OfField>
+                                )}
+                                <OfField label="Titre dans le PDF" hint={o.publicTitle ? 'Titre personnalisé.' : `Automatique : « ${autoOptionTitle(o)} »`} className={o.kind === 'location' ? 'md:col-span-2' : ''}>
+                                    <div className="flex gap-2">
+                                        <input value={o.publicTitle} onChange={set('publicTitle')} placeholder={autoOptionTitle(o)} className={ofInput} />
+                                        {o.publicTitle && <button type="button" onClick={() => onChange({ publicTitle: '' })} className="text-xs px-2 bg-slate-100 rounded-lg shrink-0" title="Revenir au titre automatique"><i className="ph ph-arrow-counter-clockwise"></i></button>}
+                                    </div>
+                                </OfField>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <OfField label="Quartier"><input value={o.neighborhood} onChange={set('neighborhood')} placeholder="Ex. Maârif, L’Oasis" className={ofInput} /></OfField>
+                                <OfField label="Ville"><input value={o.city} onChange={set('city')} placeholder={so.destination} className={ofInput} /></OfField>
+                                <OfField label="Surface (m²)"><input type="number" min="0" value={o.surface} onChange={set('surface')} className={ofInput} /></OfField>
+                                <OfField label="Logement / chambre"><input value={o.unitLabel} onChange={set('unitLabel')} placeholder="Ex. Une chambre séparée" className={ofInput} /></OfField>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <OfField label="Sous-titre (PDF)" hint={o.subtitle ? '' : `Automatique : « ${optionSubtitle(o)} »`}><input value={o.subtitle} onChange={set('subtitle')} placeholder={optionSubtitle(o)} className={ofInput} /></OfField>
+                                <OfField label={o.kind === 'location' ? 'Adresse (interne)' : 'Adresse de l’hôtel'} hint={o.kind === 'location' ? 'Pour une location privée, le PDF n’affiche que le quartier.' : ''}><input value={o.address} onChange={set('address')} className={ofInput} /></OfField>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <OfField label="Couchage"><textarea rows={2} value={o.bedding} onChange={set('bedding')} className={ofInput} /></OfField>
+                                <OfField label="Équipements"><textarea rows={2} value={o.equipments} onChange={set('equipments')} className={ofInput} /></OfField>
+                                <OfField label="Formule et repas"><textarea rows={2} value={o.formula} onChange={set('formula')} placeholder="Ex. Petit-déjeuner inclus" className={ofInput} /></OfField>
+                                <OfField label="Services"><textarea rows={2} value={o.services} onChange={set('services')} className={ofInput} /></OfField>
+                                <OfField label={o.kind === 'location' ? 'Le quartier' : 'Emplacement'}><textarea rows={2} value={o.neighborhoodText} onChange={set('neighborhoodText')} className={ofInput} /></OfField>
+                                <OfField label="Pour vos vacances (point fort)"><textarea rows={2} value={o.highlight} onChange={set('highlight')} className={ofInput} /></OfField>
+                                <OfField label="Points à confirmer" className="md:col-span-2"><textarea rows={2} value={o.remark} onChange={set('remark')} placeholder="Ex. Disponibilité et conditions d’accueil pour une adulte et un enfant à confirmer avant réservation." className={ofInput} /></OfField>
+                            </div>
+
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                                <OfField label="Tarif par nuit (MAD)" hint={o.rateSource === 'catalog' ? `Repris du catalogue (saison ${SEASON_LABELS[so.season].toLowerCase()})` : 'Tarif ajusté pour cette offre'}>
+                                    <input type="number" min="0" value={o.nightlyRate === null ? '' : o.nightlyRate} onChange={(e) => onChange({ nightlyRate: e.target.value === '' ? null : Number(e.target.value), rateSource: 'manual' })} placeholder="Sur demande" className={ofInput + ' font-bold bg-white'} />
+                                </OfField>
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Total {nightsLabel(nights)}</p>
+                                    <p className="font-black text-lg">{total !== null ? formatOfferAmount(total, currency) : <span className="italic text-slate-400 text-sm">Sur demande</span>}</p>
+                                </div>
+                                <OfField label="Précision tarif"><input value={o.rateNote} onChange={set('rateNote')} placeholder="Ex. petit-déjeuner inclus" className={ofInput + ' bg-white'} /></OfField>
+                                <OfField label="Libellé récapitulatif" hint={o.summaryLabel ? '' : `Auto : « ${optionSummaryLabel(o)} »`}><input value={o.summaryLabel} onChange={set('summaryLabel')} placeholder={optionSummaryLabel(o)} className={ofInput + ' bg-white'} /></OfField>
+                                {catalogRate !== null && (
+                                    <p className="col-span-2 md:col-span-4 text-[11px] text-amber-800">
+                                        Catalogue : basse {o.catalogPrices.basse} · moyenne {o.catalogPrices.moyenne} · haute {o.catalogPrices.haute} MAD.
+                                        {o.rateSource !== 'catalog' && <button type="button" onClick={() => onChange({ nightlyRate: toNumberOrNull(catalogRate), rateSource: 'catalog' })} className="ml-2 underline font-bold">Reprendre le tarif {SEASON_LABELS[so.season].toLowerCase()} ({catalogRate || 'sur demande'})</button>}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div>
+                                <p className="text-[11px] font-bold text-slate-500 uppercase mb-2">Photos — la première est la photo principale, les suivantes forment la galerie</p>
+                                <PhotoListEditor photos={o.photos} onChange={(photos) => onChange({ photos })} label={optionTitle(o)} />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <OfField label="Note sous la galerie"><input value={o.galleryNote} onChange={set('galleryNote')} placeholder="Ex. Photos officielles de l’hôtel." className={ofInput} /></OfField>
+                                <OfField label="Lien vers le site / la galerie"><input type="url" value={o.websiteUrl} onChange={set('websiteUrl')} placeholder="https://" className={ofInput} /></OfField>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 justify-end pt-2 border-t">
+                                {o.catalogId && <button type="button" onClick={onResetFromCatalog} className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg font-bold"><i className="ph ph-arrows-clockwise"></i> Recharger depuis le catalogue</button>}
+                                <button type="button" onClick={onDuplicate} className="text-xs px-3 py-1.5 bg-slate-100 rounded-lg font-bold"><i className="ph ph-copy"></i> Dupliquer l’option</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ---------- Générateur d'offre ----------
+        function StayOfferBuilderView({ clients, catalog, saveCatalog, logoUrl, payload, quotes, onSaveOffer, onGenerateFinal, onDuplicate, onCancel }) {
+            const existing = payload && payload.quote && payload.quote.stayOffer ? payload.quote : null;
+            const prefill = payload && payload.prefill ? payload.prefill : null;
+            const initialClientId = existing ? existing.clientId : ((payload && payload.prospectId) || (prefill && prefill.clientId) || (clients[0] ? clients[0].id : ''));
+
+            const [quoteId] = useState(() => (existing ? existing.id : `DEV-${Date.now().toString().slice(-6)}`));
+            const [quoteDate] = useState(() => (existing ? existing.date : new Date().toLocaleDateString('fr-FR')));
+            const [status, setStatus] = useState(existing ? existing.status || 'Brouillon' : 'Brouillon');
+            const [clientId, setClientId] = useState(initialClientId);
+            const [so, setSo] = useState(() => (existing
+                ? normalizeStayOffer(deepClone(existing.stayOffer))
+                : createDefaultStayOffer({ client: clients.find((c) => c.id == initialClientId), prefill, catalog })));
+            const [savedOnce, setSavedOnce] = useState(!!existing);
+            const [dirty, setDirty] = useState(!existing);
+            const [openUid, setOpenUid] = useState(null);
+            const [showPicker, setShowPicker] = useState(false);
+            const [showPreview, setShowPreview] = useState(false);
+            const [toast, setToast] = useState('');
+
+            const client = clients.find((c) => c.id == clientId);
+            const nights = nightsBetween(so.dateIn, so.dateOut);
+            const currency = so.currency;
+            const update = (patch) => { setSo((prev) => ({ ...prev, ...patch })); setDirty(true); };
+            const updateTransfer = (patch) => { setSo((prev) => ({ ...prev, transfer: { ...prev.transfer, ...patch } })); setDirty(true); };
+            const updateOption = (uid, patch) => { setSo((prev) => ({ ...prev, options: prev.options.map((o) => (o.uid === uid ? { ...o, ...patch } : o)) })); setDirty(true); };
+            const flash = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2600); };
+
+            useEffect(() => {
+                const handler = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
+                window.addEventListener('beforeunload', handler);
+                return () => window.removeEventListener('beforeunload', handler);
+            }, [dirty]);
+
+            const changeClient = (id) => {
+                const c = clients.find((x) => x.id == id);
+                const pData = c && c.prospectData;
+                setClientId(id);
+                update({
+                    clientLabel: c ? `${c.firstName || ''} ${c.lastName || ''}`.trim() : '',
+                    reference: savedOnce ? so.reference : makeOfferReference(c, so.issuedDate),
+                    ...(pData && !so.dateIn && pData.dateIn ? { dateIn: pData.dateIn } : {}),
+                    ...(pData && !so.dateOut && pData.dateOut ? { dateOut: pData.dateOut } : {}),
+                    ...(pData && !so.destination && pData.dest && cityKey(pData.dest) !== 'maroc' ? { destination: pData.dest } : {}),
+                });
+            };
+
+            const changeDestination = (value) => {
+                const patch = { destination: value };
+                const rec = (catalog.destinations || []).find((d) => sameCity(d.name, value));
+                if (rec && rec.photo && !so.coverPhoto) patch.coverPhoto = normalizePhoto({ ...rec.photo, id: offerUid() });
+                // Tarif du transfert aéroport repris du catalogue s'il n'a pas encore été saisi.
+                const airport = findAirportTransfer(catalog, value);
+                if (airport && so.transfer.price === null) patch.transfer = { ...so.transfer, price: toNumberOrNull(airport.price) };
+                update(patch);
+            };
+
+            const changeSeason = (season) => {
+                setSo((prev) => ({
+                    ...prev, season,
+                    options: prev.options.map((o) => (o.rateSource === 'catalog' && o.catalogPrices ? { ...o, nightlyRate: toNumberOrNull(o.catalogPrices[season]) } : o)),
+                }));
+                setDirty(true);
+            };
+
+            const changeChildren = (value) => {
+                const n = toCount(value, 0);
+                update({ children: n, childrenAges: Array.from({ length: n }, (_, i) => so.childrenAges[i] || '') });
+            };
+
+            const addFromCatalog = (items) => {
+                const added = items.map((item) => makeOptionFromCatalog(item, { season: so.season, destination: so.destination }));
+                update({ options: [...so.options, ...added] });
+                setShowPicker(false);
+                if (added.length === 1) setOpenUid(added[0].uid);
+                flash(`${added.length} hébergement${added.length > 1 ? 's' : ''} ajouté${added.length > 1 ? 's' : ''}.`);
+            };
+            const addManual = () => {
+                const opt = normalizeOfferOption({ uid: offerUid(), source: 'manual', kind: 'location', type: 'Appartement', city: so.destination, snapshotAt: new Date().toISOString() });
+                update({ options: [...so.options, opt] });
+                setOpenUid(opt.uid);
+            };
+            const moveOption = (uid, dir) => {
+                const opts = [...so.options];
+                const i = opts.findIndex((o) => o.uid === uid);
+                const g = offerGroup(opts[i].kind);
+                let j = i + dir;
+                while (j >= 0 && j < opts.length && offerGroup(opts[j].kind) !== g) j += dir;
+                if (j < 0 || j >= opts.length) return;
+                [opts[i], opts[j]] = [opts[j], opts[i]];
+                update({ options: opts });
+            };
+            const removeOption = (uid) => update({ options: so.options.filter((o) => o.uid !== uid), selection: so.selection && so.selection.optionUid === uid ? null : so.selection });
+            const duplicateOption = (uid) => {
+                const src = so.options.find((o) => o.uid === uid);
+                const copy = normalizeOfferOption({ ...deepClone(src), uid: offerUid(), publicTitle: src.publicTitle ? src.publicTitle + ' (variante)' : '', photos: src.photos.map((p) => ({ ...p, id: offerUid() })) });
+                const i = so.options.findIndex((o) => o.uid === uid);
+                const opts = [...so.options];
+                opts.splice(i + 1, 0, copy);
+                update({ options: opts });
+                setOpenUid(copy.uid);
+            };
+            const resetFromCatalog = (uid) => {
+                const o = so.options.find((x) => x.uid === uid);
+                const item = (catalog.accommodations || []).find((a) => a.id === o.catalogId);
+                if (!item) { alert('Cet hébergement n’existe plus dans le catalogue.'); return; }
+                if (!window.confirm('Remplacer les informations, photos et tarif de cette option par la fiche actuelle du catalogue ?')) return;
+                const fresh = makeOptionFromCatalog(item, { season: so.season, destination: so.destination });
+                updateOption(uid, { ...fresh, uid });
+            };
+
+            const rememberCoverForDestination = () => {
+                if (!so.destination || !so.coverPhoto) return;
+                const list = (catalog.destinations || []).filter((d) => !sameCity(d.name, so.destination));
+                saveCatalog({ ...catalog, destinations: [{ name: so.destination, photo: deepClone(so.coverPhoto) }, ...list] });
+                flash(`Photo mémorisée pour ${so.destination}.`);
+            };
+
+            const toClientId = (id) => { const n = parseInt(id, 10); return isNaN(n) || String(n) !== String(id).trim() ? id : n; };
+
+            const buildOfferQuote = (soArg, overrides) => {
+                const s = soArg || so;
+                return {
+                    ...(existing || {}),
+                    id: quoteId, date: quoteDate, clientId: toClientId(clientId),
+                    docType: 'proposition', offerKind: 'illustree',
+                    quoteCity: s.destination, tripName: offerTitle(s), pax: s.adults + s.children,
+                    currency: s.currency, dateIn: s.dateIn, dateOut: s.dateOut, globalSeason: s.season,
+                    accommodations: s.options.map((o) => optionToLegacyAccommodation(o, s)),
+                    activities: [], transports: [], cars: [],
+                    isAutoFee: false, manualFeeMAD: 0, feeComment: '', subTotal: 0, finalFee: 0, total: 0,
+                    status, stayOffer: deepClone(s), updatedAt: new Date().toISOString(),
+                    ...(overrides || {}),
+                };
+            };
+
+            const saveDraft = () => {
+                if (!clientId) { alert('Veuillez sélectionner un client.'); return false; }
+                onSaveOffer(buildOfferQuote());
+                setSavedOnce(true);
+                setDirty(false);
+                flash('Offre enregistrée.');
+                return true;
+            };
+
+            // ----- Choix du client -> devis final -----
+            const selection = so.selection || { optionUid: '', transferReserved: false };
+            const selectedOption = so.options.find((o) => o.uid === selection.optionUid) || null;
+            const setSelection = (patch) => update({ selection: { optionUid: '', transferReserved: false, ...(so.selection || {}), ...patch } });
+            const selRate = selectedOption ? toNumberOrNull(selectedOption.nightlyRate) : null;
+            const selAccom = selRate !== null && nights > 0 ? selRate * nights : null;
+            const selTransfer = selection.transferReserved && so.transfer.enabled ? (toNumberOrNull(so.transfer.price) || 0) : 0;
+            const selBase = selAccom !== null ? selAccom + selTransfer : null;
+            const selFee = selBase !== null ? computeFee(selBase, so.feePercent) : null;
+            const existingFinal = so.selection && so.selection.finalQuoteId ? quotes.find((q) => q.id === so.selection.finalQuoteId) : null;
+
+            const generateFinal = () => {
+                if (!clientId) { alert('Veuillez sélectionner un client.'); return; }
+                if (!selectedOption) { alert('Sélectionnez l’hébergement retenu par le client.'); return; }
+                if (nights <= 0) { alert('Renseignez des dates d’arrivée et de départ valides.'); return; }
+                if (selRate === null) { alert('L’hébergement retenu est « sur demande » : saisissez son tarif par nuit avant de générer le devis final.'); setOpenUid(selectedOption.uid); return; }
+                if (selection.transferReserved && !toNumberOrNull(so.transfer.price)) { alert('Le transfert réservé n’a pas de tarif : renseignez-le dans le bloc Transfert.'); return; }
+                if (existingFinal && !window.confirm(`Un devis final existe déjà (${existingFinal.id}). En générer un nouveau ?`)) return;
+                const offerQuote = buildOfferQuote(so);
+                const finalQuote = buildFinalQuoteFromOffer({ offerQuote, so, option: selectedOption, transferReserved: !!selection.transferReserved && so.transfer.enabled });
+                const newSo = { ...so, selection: { ...selection, transferReserved: !!selection.transferReserved && so.transfer.enabled, finalQuoteId: finalQuote.id, decidedAt: todayISO() } };
+                setSo(newSo);
+                setDirty(false);
+                onGenerateFinal(buildOfferQuote(newSo, { status: 'Validé' }), finalQuote);
+            };
+
+            // ----- Contrôles avant export -----
+            const warnings = [];
+            if (!client) warnings.push('Aucun client sélectionné.');
+            if (!so.destination) warnings.push('Destination non renseignée.');
+            if (!nights) warnings.push('Dates du séjour manquantes ou incohérentes : le nombre de nuits ne peut pas être calculé.');
+            if (!so.options.length) warnings.push('Aucun hébergement dans l’offre.');
+            if (!logoUrl) warnings.push('Aucun logo configuré dans Paramètres : le nom DI’ALLO sera affiché en texte.');
+            if (!so.coverPhoto) warnings.push('Pas de photo de destination pour la couverture.');
+            so.options.forEach((o) => {
+                const t = optionTitle(o);
+                if (!o.photos.length) warnings.push(`« ${t} » : aucune photo.`);
+                if (toNumberOrNull(o.nightlyRate) === null) warnings.push(`« ${t} » : tarif non renseigné, affiché « Sur demande ».`);
+                const unvalidated = o.photos.filter((p) => !p.caption || !p.captionValidated).length;
+                if (unvalidated) warnings.push(`« ${t} » : ${unvalidated} légende(s) vide(s) ou non validée(s).`);
+                const unauthorized = o.photos.filter((p) => !p.authorized).length;
+                if (unauthorized) warnings.push(`« ${t} » : ${unauthorized} photo(s) non marquée(s) comme autorisée(s).`);
+            });
+            if (so.transfer.enabled && !toNumberOrNull(so.transfer.price)) warnings.push('Transfert sans tarif : affiché « Sur demande ».');
+
+            const vm = buildOfferViewModel(so, { client, logoUrl });
+            const fileName = ['Offre_Sejour', so.destination, vm.clientLabel].filter(Boolean).join('_').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_');
+            const locOptions = so.options.filter((o) => offerGroup(o.kind) === 'location');
+            const hotelOptions = so.options.filter((o) => offerGroup(o.kind) !== 'location');
+            const orderedOptions = [...locOptions, ...hotelOptions];
+            const cityList = Array.from(new Set([...(catalog.accommodations || []).map((a) => a.city), ...(catalog.destinations || []).map((d) => d.name), 'Casablanca', 'Marrakech', 'Rabat', 'Agadir', 'Fès', 'Tanger'].filter(Boolean)));
+
+            const renderGroup = (list, title) => list.length > 0 && (
+                <div className="space-y-3">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{title}</p>
+                    {list.map((o, gi) => (
+                        <OfferOptionEditor key={o.uid} option={o} index={orderedOptions.indexOf(o) + 1} groupIndex={gi} groupCount={list.length}
+                            nights={nights} so={so} currency={currency} open={openUid === o.uid}
+                            onToggle={() => setOpenUid(openUid === o.uid ? null : o.uid)}
+                            onChange={(patch) => updateOption(o.uid, patch)} onMove={(d) => moveOption(o.uid, d)}
+                            onRemove={() => removeOption(o.uid)} onDuplicate={() => duplicateOption(o.uid)} onResetFromCatalog={() => resetFromCatalog(o.uid)} />
+                    ))}
+                </div>
+            );
+
+            return (
+                <div className="max-w-7xl mx-auto pb-24">
+                    <datalist id="of-accom-types">{ACCOM_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
+                    <datalist id="of-cities">{cityList.map((c) => <option key={c} value={c} />)}</datalist>
+
+                    <div className="bg-slate-900 rounded-2xl p-4 md:p-5 text-white flex flex-col lg:flex-row justify-between lg:items-center gap-3 shadow-xl mb-6 no-print sticky top-4 z-40">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-slate-900 text-2xl"><i className="ph ph-images"></i></div>
+                            <div>
+                                <h2 className="text-xl font-black">Offre de séjour illustrée {savedOnce && <span className="text-xs font-bold text-slate-400 ml-1">{quoteId}</span>}</h2>
+                                <p className="text-slate-400 text-xs">{dirty ? 'Modifications non enregistrées' : 'Brouillon à jour'} · statut : {status}</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={() => { if (!dirty || window.confirm('Quitter sans enregistrer les modifications ?')) onCancel(); }} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm">Retour</button>
+                            {savedOnce && <button onClick={() => { if (dirty && !window.confirm('Dupliquer la version enregistrée ? Les modifications en cours seront d’abord enregistrées.')) return; const q = buildOfferQuote(); setDirty(false); onDuplicate(q); }} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm flex items-center gap-1"><i className="ph ph-copy"></i> Dupliquer</button>}
+                            <button onClick={() => setShowPreview(true)} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold flex items-center gap-1"><i className="ph ph-eye"></i> Aperçu & PDF</button>
+                            <button onClick={saveDraft} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-sm flex items-center gap-1 shadow-lg shadow-amber-500/20"><i className="ph ph-floppy-disk"></i> Enregistrer le brouillon</button>
+                        </div>
+                    </div>
+
+                    {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-lg z-[80] text-sm font-bold no-print"><i className="ph ph-check-circle"></i> {toast}</div>}
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 no-print">
+                        <div className="xl:col-span-2 space-y-6">
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                                <h3 className="font-bold text-lg flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-user-circle text-blue-500"></i> Client et séjour</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <OfField label="Client">
+                                        <select value={clientId} onChange={(e) => changeClient(e.target.value)} className={ofInput}>
+                                            <option value="">Sélectionner…</option>
+                                            {clients.map((c) => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                                        </select>
+                                    </OfField>
+                                    <OfField label="Nom affiché dans le PDF" hint="Ex. Mme Aissata"><input value={so.clientLabel} onChange={(e) => update({ clientLabel: e.target.value })} className={ofInput} /></OfField>
+                                    <OfField label="Destination"><input list="of-cities" value={so.destination} onChange={(e) => changeDestination(e.target.value)} placeholder="Ex. Casablanca" className={ofInput + ' font-bold'} /></OfField>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                                    <OfField label="Arrivée" className="col-span-1 md:col-span-2"><input type="date" value={so.dateIn} onChange={(e) => update({ dateIn: e.target.value })} className={ofInput} /></OfField>
+                                    <OfField label="Départ" className="col-span-1 md:col-span-2"><input type="date" value={so.dateOut} min={so.dateIn || undefined} onChange={(e) => update({ dateOut: e.target.value })} className={ofInput} /></OfField>
+                                    <div className="col-span-2 md:col-span-2 flex items-end">
+                                        <div className={`w-full p-2 rounded-lg text-center font-black ${nights ? 'bg-amber-100 text-amber-800' : 'bg-red-50 text-red-600 text-xs'}`}>
+                                            {nights ? <><i className="ph ph-moon"></i> {nightsLabel(nights)}</> : 'Dates à compléter'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+                                    <OfField label="Adultes"><input type="number" min="0" value={so.adults} onChange={(e) => update({ adults: toCount(e.target.value, 0) })} className={ofInput + ' text-center font-bold'} /></OfField>
+                                    <OfField label="Enfants"><input type="number" min="0" value={so.children} onChange={(e) => changeChildren(e.target.value)} className={ofInput + ' text-center font-bold'} /></OfField>
+                                    {so.childrenAges.map((age, i) => (
+                                        <OfField key={i} label={`Âge enfant ${i + 1}`}><input type="number" min="0" max="17" value={age} placeholder="?" onChange={(e) => update({ childrenAges: so.childrenAges.map((a, k) => (k === i ? e.target.value : a)) })} className={ofInput + ' text-center'} /></OfField>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-500">Voyageurs : <strong>{travelersLabel(so.adults, so.children, so.childrenAges)}</strong> · {formatStayRange(so.dateIn, so.dateOut) || 'dates à préciser'}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <OfField label="Titre de l’offre" className="md:col-span-2"><input value={so.title} onChange={(e) => update({ title: e.target.value })} placeholder={offerTitle({ ...so, title: '' })} className={ofInput} /></OfField>
+                                    <OfField label="Saison (tarifs catalogue)">
+                                        <select value={so.season} onChange={(e) => changeSeason(e.target.value)} className={ofInput}>
+                                            {Object.keys(SEASON_LABELS).map((s) => <option key={s} value={s}>{SEASON_LABELS[s]}</option>)}
+                                        </select>
+                                    </OfField>
+                                    <OfField label="Devise du PDF">
+                                        <select value={so.currency} onChange={(e) => update({ currency: e.target.value })} className={ofInput}>
+                                            <option value="MAD">DH (MAD)</option><option value="EUR">EUR</option><option value="FCFA">FCFA</option>
+                                        </select>
+                                    </OfField>
+                                </div>
+                                <OfField label="Phrase d’introduction (couverture)" hint={so.intro ? '' : `Automatique : « ${offerIntro({ ...so, intro: '' }) || '—'} »`}>
+                                    <input value={so.intro} onChange={(e) => update({ intro: e.target.value })} placeholder={offerIntro({ ...so, intro: '' })} className={ofInput} />
+                                </OfField>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                                <h3 className="font-bold text-lg flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-image-square text-emerald-600"></i> Photos de destination</h3>
+                                <OfField label="Couverture">
+                                    <SinglePhotoField photo={so.coverPhoto} onChange={(p) => update({ coverPhoto: p })} label="Photo de couverture" withCredit />
+                                </OfField>
+                                {so.coverPhoto && so.destination && <button type="button" onClick={rememberCoverForDestination} className="text-xs font-bold text-emerald-700 underline"><i className="ph ph-bookmark-simple"></i> Utiliser cette photo par défaut pour {so.destination}</button>}
+                                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={so.closingSameAsCover} onChange={(e) => update({ closingSameAsCover: e.target.checked })} className="accent-amber-500" /> Réutiliser la photo de couverture sur la page de fin</label>
+                                {!so.closingSameAsCover && <OfField label="Page de fin"><SinglePhotoField photo={so.closingPhoto} onChange={(p) => update({ closingPhoto: p })} label="Photo de fin" withCredit /></OfField>}
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 space-y-4">
+                                <div className="flex flex-wrap justify-between items-center gap-2 border-b border-slate-100 pb-2">
+                                    <h3 className="font-bold text-lg flex items-center gap-2 text-amber-700"><i className="ph ph-bed"></i> Hébergements au choix ({so.options.length})</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setShowPicker(true)} className="text-sm bg-amber-500 hover:bg-amber-600 font-bold px-3 py-1.5 rounded-lg"><i className="ph ph-list-checks"></i> Depuis le catalogue</button>
+                                        <button onClick={addManual} className="text-sm bg-slate-100 hover:bg-slate-200 font-bold px-3 py-1.5 rounded-lg"><i className="ph ph-plus"></i> Hors catalogue</button>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500">Chaque option est une copie : vos ajustements (textes, photos, tarif) ne modifient pas la fiche du catalogue. Dans le PDF, les locations privées apparaissent d’abord, puis les hôtels et appart’hôtels.</p>
+                                {so.options.length === 0 && <div className="p-8 text-center text-slate-400 border-2 border-dashed rounded-xl text-sm">Ajoutez des hébergements depuis le catalogue ou hors catalogue.</div>}
+                                {renderGroup(locOptions, 'Locations privées')}
+                                {renderGroup(hotelOptions, 'Hôtels et appart’hôtels')}
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-emerald-200 space-y-3">
+                                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                    <h3 className="font-bold text-lg flex items-center gap-2 text-emerald-700"><i className="ph ph-van"></i> Transfert aéroport (option)</h3>
+                                    <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={so.transfer.enabled} onChange={(e) => updateTransfer({ enabled: e.target.checked })} className="accent-emerald-600 w-4 h-4" /> Proposer</label>
+                                </div>
+                                {so.transfer.enabled && <>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <OfField label="Tarif (MAD)"><input type="number" min="0" value={so.transfer.price === null ? '' : so.transfer.price} placeholder="Sur demande" onChange={(e) => updateTransfer({ price: toNumberOrNull(e.target.value) })} className={ofInput + ' font-bold'} /></OfField>
+                                        <OfField label="Trajet">
+                                            <select value={so.transfer.tripType} onChange={(e) => updateTransfer({ tripType: e.target.value })} className={ofInput}>
+                                                <option value="aller-simple">Aller simple</option><option value="aller-retour">Aller-retour</option>
+                                            </select>
+                                        </OfField>
+                                        <OfField label="Itinéraire" className="col-span-2"><input value={so.transfer.route} onChange={(e) => updateTransfer({ route: e.target.value })} className={ofInput} /></OfField>
+                                    </div>
+                                    <OfField label="Description"><textarea rows={2} value={so.transfer.description} onChange={(e) => updateTransfer({ description: e.target.value })} className={ofInput} /></OfField>
+                                    <OfField label="Photo du transfert (facultative)"><SinglePhotoField photo={so.transfer.photo} onChange={(p) => updateTransfer({ photo: p })} label="Photo du transfert" /></OfField>
+                                </>}
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                                <h3 className="font-bold text-lg flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-handshake text-purple-600"></i> Honoraires et mentions</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <OfField label="Honoraires (%)" hint="Appliqués au coût total des prestations retenues, transfert compris s’il est réservé.">
+                                        <input type="number" min="0" step="0.5" value={so.feePercent} onChange={(e) => update({ feePercent: e.target.value === '' ? 0 : Number(e.target.value) })} className={ofInput + ' font-bold'} />
+                                    </OfField>
+                                    <OfField label="Référence" ><input value={so.reference} onChange={(e) => update({ reference: e.target.value })} className={ofInput} /></OfField>
+                                    <OfField label="Date de la proposition" className="md:col-span-2"><input type="date" value={so.issuedDate} onChange={(e) => update({ issuedDate: e.target.value })} className={ofInput} /></OfField>
+                                </div>
+                                <OfField label="Pour confirmer votre réservation"><textarea rows={3} value={so.confirmText} onChange={(e) => update({ confirmText: e.target.value })} className={ofInput} /></OfField>
+                                <OfField label="Conditions"><textarea rows={2} value={so.conditionsText} onChange={(e) => update({ conditionsText: e.target.value })} className={ofInput} /></OfField>
+                            </div>
+                        </div>
+
+                        <div className="xl:col-span-1 space-y-6">
+                            <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-xl xl:sticky xl:top-32 space-y-5">
+                                <div>
+                                    <h3 className="text-lg font-black mb-3 flex items-center gap-2 border-b border-slate-700 pb-3"><i className="ph ph-calculator text-amber-500"></i> Bilan interne</h3>
+                                    <p className="text-xs text-slate-400 mb-3">{nightsLabel(nights)} · {travelersLabel(so.adults, so.children, so.childrenAges)}. Options alternatives : aucun total global.</p>
+                                    <div className="space-y-1.5 text-sm max-h-56 overflow-y-auto pr-1">
+                                        {orderedOptions.map((o, i) => {
+                                            const t = optionTotal(o, nights);
+                                            return <div key={o.uid} className="flex justify-between gap-2"><span className="text-slate-300 truncate">{pad2(i + 1)} · {optionTitle(o)}</span><span className="font-bold shrink-0">{t !== null ? formatOfferAmount(t, currency) : <em className="text-slate-500 font-normal">Sur demande</em>}</span></div>;
+                                        })}
+                                        {so.transfer.enabled && <div className="flex justify-between gap-2 border-t border-slate-700 pt-1.5"><span className="text-emerald-300">Transfert ({TRIP_TYPES[so.transfer.tripType]})</span><span className="font-bold">{so.transfer.price ? formatOfferAmount(so.transfer.price, currency) : <em className="text-slate-500 font-normal">Sur demande</em>}</span></div>}
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 space-y-3">
+                                    <h4 className="font-bold flex items-center gap-2"><i className="ph ph-hand-pointing text-amber-500"></i> Choix du client</h4>
+                                    <select value={selection.optionUid || ''} onChange={(e) => setSelection({ optionUid: e.target.value })} className="w-full p-2 bg-slate-900 border border-slate-600 rounded-lg text-sm">
+                                        <option value="">Hébergement retenu…</option>
+                                        {orderedOptions.map((o, i) => <option key={o.uid} value={o.uid}>{pad2(i + 1)} · {optionTitle(o)}</option>)}
+                                    </select>
+                                    <label className={`flex items-center gap-2 text-sm ${so.transfer.enabled ? '' : 'opacity-40'}`}><input type="checkbox" disabled={!so.transfer.enabled} checked={!!selection.transferReserved && so.transfer.enabled} onChange={(e) => setSelection({ transferReserved: e.target.checked })} className="accent-amber-500" /> Transfert réservé</label>
+                                    {selectedOption && (
+                                        <div className="text-sm space-y-1 bg-slate-900/60 rounded-lg p-3">
+                                            <div className="flex justify-between"><span className="text-slate-400">Hébergement</span><span>{selAccom !== null ? formatOfferAmount(selAccom, currency) : 'Tarif manquant'}</span></div>
+                                            <div className="flex justify-between"><span className="text-slate-400">Transfert</span><span>{formatOfferAmount(selTransfer, currency)}</span></div>
+                                            <div className="flex justify-between border-t border-slate-700 pt-1"><span className="text-slate-400">Base honoraires</span><span className="font-bold">{selBase !== null ? formatOfferAmount(selBase, currency) : '—'}</span></div>
+                                            <div className="flex justify-between text-amber-400"><span>Honoraires {so.feePercent} %</span><span className="font-bold">{selFee !== null ? formatOfferAmount(selFee, currency) : '—'}</span></div>
+                                            <div className="flex justify-between text-lg font-black border-t border-slate-700 pt-1"><span>Total devis</span><span>{selBase !== null ? formatOfferAmount(selBase + selFee, currency) : '—'}</span></div>
+                                        </div>
+                                    )}
+                                    <button onClick={generateFinal} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-black py-2.5 rounded-xl flex items-center justify-center gap-2"><i className="ph ph-file-arrow-down"></i> Générer le devis final</button>
+                                    {existingFinal && <p className="text-xs text-slate-400">Devis final existant : <strong className="text-white">{existingFinal.id}</strong> ({existingFinal.status}).</p>}
+                                    <p className="text-[11px] text-slate-500 leading-snug">Le devis final reprend le flux habituel : validez-le dans « Devis & Propositions » pour créer la commande, puis la facture.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-bold text-sm mb-2 flex items-center gap-2"><i className="ph ph-list-checks text-amber-500"></i> Contrôles avant export ({warnings.length})</h4>
+                                    {warnings.length === 0 ? <p className="text-xs text-emerald-400">Tout est prêt.</p> : (
+                                        <ul className="text-xs text-slate-300 space-y-1 max-h-48 overflow-y-auto list-disc pl-4">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {showPicker && <CatalogAccomPicker catalog={catalog} destination={so.destination} existingCatalogIds={so.options.map((o) => o.catalogId).filter(Boolean)} onAdd={addFromCatalog} onClose={() => setShowPicker(false)} />}
+                    {showPreview && <StayOfferPreviewModal vm={vm} fileName={fileName} warnings={warnings} onClose={() => setShowPreview(false)} />}
+                </div>
             );
         }
 
