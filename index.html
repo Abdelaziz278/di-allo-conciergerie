@@ -1305,7 +1305,7 @@
           const handleAddTransport = (e) => {
             const item = catalog.transports.find(a => a.id == e.target.value);
             const qty = item.pricingMode === 'pax' ? pax : 1;
-            if (item) setTransports([...transports, { ...item, quantity: qty }]);
+            if (item) setTransports([...transports, { ...item, quantity: qty, dates: defaultTransferDates(item, item.pricingMode === 'pax' ? 1 : qty, dateIn, dateOut) }]);
             e.target.value = '';
           };
           const handleAddCar = (e) => {
@@ -1341,6 +1341,12 @@
               : isAutoFee
                   ? [`Si coût total ${accommodations.length > 0 ? 'du séjour' : 'des prestations'} > à 4 000 € : une commission de 10 % est prélevée sur le coût total.`, `Si coût total ${accommodations.length > 0 ? 'du séjour' : 'des prestations'} < à 4 000 € : forfait fixe de 400 € appliqué.`]
                   : [`Honoraires ${normalizeCompany(company).name} : ${renderMoney(finalFeeMAD, currency)}${feeComment ? ' (' + feeComment + ')' : ''}.`];
+          const serviceSummary = buildServiceSummary({
+              accommodations, transports, cars, activities, pax,
+              travelersLabel: (existingQuote && existingQuote.travelersLabel && existingQuote.pax === pax) ? existingQuote.travelersLabel : null,
+              dateIn, dateOut, nights: accommodations.length > 0 && dateIn && dateOut ? calculatedNights : 0,
+              cities: null, proposition: docType === 'proposition',
+          });
           const travelersText = (existingQuote && existingQuote.travelersLabel && existingQuote.pax === pax) ? existingQuote.travelersLabel : `${pax} adulte(s)`;
           const totalMAD = subTotalMAD + finalFeeMAD;
 
@@ -1478,6 +1484,14 @@
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-text-align-left text-amber-600"></i> Résumé de l’offre <span className="text-xs font-normal text-slate-400">(aperçu client, mis à jour automatiquement)</span></h3>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-amber-700 mb-1">{docType === 'proposition' ? 'Proposition' : serviceSummary.title}</p>
+                      <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 border-l-4 border-amber-500 rounded-lg p-3">
+                          <ServiceSummaryText summary={{ ...serviceSummary, lines: [...serviceSummary.lines, `Lieu(x) d’intervention : **${uniqueCities.length > 0 ? displayCities : quoteCity}**.`] }} />
+                      </p>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                       <h3 className="font-bold text-lg mb-3 flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-scroll text-amber-600"></i> Conditions tarifaires</h3>
                       <ConditionsEditor value={pricingConditions} onChange={setPricingConditions} feePreview={feeConditionLines.join(' / ')}
                           onReset={() => { if (window.confirm('Remplacer les conditions de ce document par celles des Paramètres ?')) setPricingConditions(defaultQuoteConditions(company)); }} />
@@ -1565,10 +1579,16 @@
                           <div className="flex-1">
                             <p className="font-bold text-slate-800 text-sm">{item.name}</p>
                             <p className="text-xs text-emerald-600 mt-1 font-medium bg-emerald-100 inline-block px-2 py-0.5 rounded">{item.mode} • {item.pricingMode === 'pax' ? 'Prix par pers.' : 'Forfait groupe'} ({renderMoney(item.price || 0, currency)})</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase text-slate-500">{transportTripCount(item) > 1 ? `Dates des ${transportTripCount(item)} trajets` : 'Date du trajet'}</span>
+                              {Array.from({ length: Math.min(transportTripCount(item), 12) }, (_, k) => (
+                                <input key={k} type="date" value={(item.dates || [])[k] || ''} onChange={(e) => { const d = [...(item.dates || [])]; d[k] = e.target.value; updateList(setTransports, transports, idx, 'dates', d); }} className="p-1 border border-slate-200 rounded text-xs bg-white" />
+                              ))}
+                            </div>
                           </div>
                           <div className="flex items-center justify-between md:justify-end gap-4 bg-white p-2 rounded-lg border border-slate-100 mt-2 md:mt-0">
                             <div className="text-center">
-                              <span className="text-[10px] text-slate-400 block uppercase font-bold">{item.pricingMode==='pax' ? 'Pax' : 'Qté'}</span>
+                              <span className="text-[10px] text-slate-400 block uppercase font-bold">{item.pricingMode==='pax' ? 'Pax' : ((parseInt(item.tripsPerUnit) || 1) > 1 ? 'Allers-retours' : 'Trajets')}</span>
                               <input type="number" min="1" value={item.quantity} onChange={(e) => updateList(setTransports, transports, idx, 'quantity', parseInt(e.target.value)||0)} className="w-12 p-1 border rounded text-center text-sm font-bold" />
                             </div>
                             <div className="w-24 text-right font-bold">{renderMoney((item.price || 0) * item.quantity, currency)}</div>
@@ -1740,7 +1760,7 @@
                   </div>
                   <div className="text-right">
                     <h2 className="text-3xl font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-100 pb-2 inline-block">
-                        {docType === 'proposition' ? 'Proposition' : (accommodations.length > 0 ? 'Offre de Séjour' : 'Offre de Services')}
+                        {docType === 'proposition' ? 'Proposition' : serviceSummary.title}
                     </h2>
                     <p className="text-slate-700 mt-4 font-bold text-xl">{tripName}</p>
                     <p className="text-slate-500 mt-1">Pour {travelersText}</p>
@@ -1758,11 +1778,7 @@
                 <div className="mb-10 bg-slate-50 p-6 rounded-xl border-l-4 border-amber-500">
                     <h3 className="text-lg font-black text-slate-800 mb-2 uppercase tracking-wider">RÉSUMÉ DE L'OFFRE</h3>
                     <p className="text-slate-600 leading-relaxed">
-                        Nous avons le plaisir de vous soumettre cette {docType === 'proposition' ? 'proposition' : 'offre'} de {accommodations.length > 0 ? 'séjour' : 'services'} sur-mesure pour <strong>{pax} personne{pax > 1 ? 's' : ''}</strong>.
-                        {dateIn && dateOut ? (
-                            <span><br/>{accommodations.length > 0 ? 'Votre séjour se déroulera' : 'Ces prestations se dérouleront'} du <strong>{new Date(dateIn).toLocaleDateString('fr-FR')}</strong> au <strong>{new Date(dateOut).toLocaleDateString('fr-FR')}</strong>{accommodations.length > 0 ? <span>, pour une durée de <strong>{calculatedNights} nuit{calculatedNights > 1 ? 's' : ''}</strong></span> : null}.</span>
-                        ) : null}
-                        <br/>Lieu(x) d'intervention : <strong>{uniqueCities.length > 0 ? displayCities : quoteCity}</strong>.
+                        <ServiceSummaryText summary={{ ...serviceSummary, lines: [...serviceSummary.lines, `Lieu(x) d’intervention : **${uniqueCities.length > 0 ? displayCities : quoteCity}**.`] }} />
                     </p>
                 </div>
 
@@ -1781,7 +1797,7 @@
                   {transports.length > 0 && (
                     <PrintTable title="Transports & Transferts" items={transports} cols={['Désignation', 'Type', 'Base', 'Total']} rowRender={(item) => (
                       <>
-                        <td className="p-3 font-bold">{item.name}</td>
+                        <td className="p-3"><span className="font-bold">{item.name}</span>{transferDatesText(item) ? <span className="block text-sm text-slate-500">{transferDatesText(item)}</span> : null}</td>
                         <td className="p-3 text-sm text-slate-500">{item.mode}</td>
                         <td className="p-3 text-right">{renderMoney(item.price || 0, currency)} <span className="text-xs text-slate-400">{item.pricingMode==='pax' ? '/pers' : '/trajet'}</span></td>
                         <td className="p-3 text-right font-bold text-amber-600">{renderMoney((item.price || 0) * item.quantity, currency)}</td>
@@ -2055,11 +2071,12 @@
                         <div className="mb-10 bg-slate-50 p-6 rounded-xl border-l-4 border-amber-500">
                             <h3 className="text-lg font-black text-slate-800 mb-2 uppercase tracking-wider">RÉSUMÉ DE L'OFFRE</h3>
                             <p className="text-slate-600 leading-relaxed">
-                                Facturation des {accommodations.length > 0 ? 'services liés à votre séjour' : 'services et prestations'} pour <strong>{pax} personne{pax > 1 ? 's' : ''}</strong>.
-                                {dateIn && dateOut ? (
-                                    <span><br/>Période concernée : du <strong>{new Date(dateIn).toLocaleDateString('fr-FR')}</strong> au <strong>{new Date(dateOut).toLocaleDateString('fr-FR')}</strong>{accommodations.length > 0 ? <span> ({calculatedNights} nuit{calculatedNights > 1 ? 's' : ''})</span> : null}.</span>
-                                ) : null}
-                                <br/>Lieu(x) d'intervention : <strong>{uniqueCities.length > 0 ? displayCities : quoteCity}</strong>.
+                                <ServiceSummaryText summary={buildServiceSummary({
+                                    accommodations, transports, cars, activities, pax,
+                                    travelersLabel: order.travelersLabel && order.pax === pax ? order.travelersLabel : null,
+                                    dateIn, dateOut, nights: accommodations.length > 0 && dateIn && dateOut ? calculatedNights : 0,
+                                    cities: uniqueCities.length > 0 ? displayCities : quoteCity, invoice: true,
+                                })} />
                             </p>
                         </div>
 
@@ -2078,7 +2095,7 @@
                             {transports.length > 0 && (
                                 <PrintTable title="Transports & Transferts" items={transports} cols={['Désignation', 'Type', 'Base', 'Total']} rowRender={(item) => (
                                 <>
-                                    <td className="p-3 font-bold">{item.name}</td>
+                                    <td className="p-3"><span className="font-bold">{item.name}</span>{transferDatesText(item) ? <span className="block text-sm text-slate-500">{transferDatesText(item)}</span> : null}</td>
                                     <td className="p-3 text-sm text-slate-500">{item.mode}</td>
                                     <td className="p-3 text-right">{renderMoney(item.price || 0, currency)} <span className="text-xs text-slate-400">{item.pricingMode==='pax' ? '/pers' : '/trajet'}</span></td>
                                     <td className="p-3 text-right font-bold text-amber-600">{renderMoney((item.price || 0) * item.quantity, currency)}</td>
@@ -3195,6 +3212,8 @@
                 activities: [], cars: [],
                 transports: transferReserved ? [{
                     id: 'offer-transfer', mode: 'Van privé', pricingMode: 'group', quantity: 1, price: transferPrice,
+                    tripsPerUnit: so.transfer.tripType === 'aller-retour' ? 2 : 1,
+                    dates: so.transfer.tripType === 'aller-retour' ? [so.dateIn || '', so.dateOut || ''] : [so.dateIn || ''],
                     name: `Transfert privé (${tripLabel})${so.transfer.route ? ' – ' + so.transfer.route : ''}`,
                 }] : [],
                 isAutoFee: false, feeMode: 'percent', feePercent: pct, manualFeeMAD: fee,
@@ -3245,6 +3264,90 @@
         function RichLine({ text }) {
             return <>{String(text || '').split('**').map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : <React.Fragment key={i}>{part}</React.Fragment>))}</>;
         }
+
+        // ---------- Résumé de l'offre adapté aux prestations choisies ----------
+        const transportTripCount = (t) => Math.max(1, (t.pricingMode === 'pax' ? 1 : (parseInt(t.quantity, 10) || 1)) * (parseInt(t.tripsPerUnit, 10) || 1));
+        const joinFr = (arr) => (arr.length <= 1 ? (arr[0] || '') : arr.slice(0, -1).join(', ') + ' et ' + arr[arr.length - 1]);
+        // Date proposée par défaut pour un transfert du catalogue : arrivée si « Aéroport => … », départ si « … => Aéroport ».
+        const defaultTransferDates = (item, count, dateIn, dateOut) => {
+            const parts = String(item.name || '').split(/=>|→|->/).map((s) => cityKey(s));
+            const fromAirport = parts[0] && parts[0].startsWith('aeroport');
+            const toAirport = parts.length > 1 && parts[parts.length - 1].startsWith('aeroport');
+            return Array.from({ length: count }, (_, i) => {
+                if (fromAirport && i === 0) return dateIn || '';
+                if (toAirport && i === 0) return dateOut || '';
+                if (count === 2 && i === 1 && fromAirport) return dateOut || '';
+                return '';
+            });
+        };
+
+        function buildServiceSummary({ accommodations = [], transports = [], cars = [], activities = [], pax = 1, travelersLabel, dateIn, dateOut, nights, cities, invoice, proposition }) {
+            const has = { acc: accommodations.length > 0, tr: transports.length > 0, car: cars.length > 0, act: activities.length > 0 };
+            const kinds = Object.values(has).filter(Boolean).length;
+            const who = travelersLabel || `${pax} personne${pax > 1 ? 's' : ''}`;
+            const tripTotal = transports.reduce((s, t) => s + transportTripCount(t), 0);
+            const period = dateIn && dateOut ? `du **${formatShortDateFR(dateIn)}** au **${formatShortDateFR(dateOut)}**` : '';
+            const accNights = nights || Math.max(0, ...accommodations.map((a) => parseInt(a.nights, 10) || 0));
+            const nightsTxt = accNights > 0 ? `**${accNights} nuit${accNights > 1 ? 's' : ''}**` : '';
+
+            // Nature de l'offre
+            let nature = 'services', invoiceNature = 'de vos prestations', title = 'Offre de Services';
+            if (has.acc) { nature = 'séjour'; invoiceNature = 'de votre séjour'; title = 'Offre de Séjour'; }
+            else if (kinds === 1 && has.tr) { nature = tripTotal > 1 ? 'transferts' : 'transfert'; invoiceNature = tripTotal > 1 ? 'de vos transferts' : 'de votre transfert'; title = tripTotal > 1 ? 'Offre de Transferts' : 'Offre de Transfert'; }
+            else if (kinds === 1 && has.car) { nature = 'location de véhicule'; invoiceNature = 'de votre location de véhicule'; title = 'Location de Véhicule'; }
+            else if (kinds === 1 && has.act) { nature = 'activités'; invoiceNature = 'de vos activités'; title = 'Offre d’Activités'; }
+            const de = /^[aeiouyhéè]/i.test(nature) ? 'd’' : 'de ';
+
+            const lines = [];
+            lines.push(invoice
+                ? `Facturation ${invoiceNature} pour **${who}**.`
+                : `Nous avons le plaisir de vous soumettre cette ${proposition ? 'proposition' : 'offre'} ${de}${nature} sur-mesure pour **${who}**.`);
+
+            if (has.acc) {
+                if (period) lines.push(invoice ? `Période du séjour : ${period}${nightsTxt ? ` (${nightsTxt})` : ''}.` : `Votre séjour se déroulera ${period}${nightsTxt ? `, soit ${nightsTxt}` : ''}.`);
+                else if (nightsTxt) lines.push(`Durée du séjour : ${nightsTxt}.`);
+                if (accommodations.length > 1) lines.push(`Hébergements : **${accommodations.length}** ${proposition ? 'options' : 'établissements'} (${joinFr(Array.from(new Set(accommodations.map((a) => a.city).filter(Boolean))))}).`);
+            }
+
+            if (has.tr) {
+                const segs = transports.map((t) => {
+                    const n = transportTripCount(t);
+                    const dated = (t.dates || []).slice(0, n).filter(Boolean);
+                    const missing = n - dated.length;
+                    let txt = t.name || 'Transfert';
+                    if (dated.length) txt += ' ' + joinFr(dated.map((d) => `le **${formatShortDateFR(d)}**`));
+                    if (missing > 0) txt += dated.length ? ` (+ ${missing} trajet${missing > 1 ? 's' : ''}, date à préciser)` : (n > 1 ? ` (${n} trajets, dates à préciser)` : ' (date à préciser)');
+                    if (t.pricingMode === 'pax' && t.quantity) txt += `, ${t.quantity} pers.`;
+                    return txt;
+                });
+                const head = `**${tripTotal} trajet${tripTotal > 1 ? 's' : ''}**`;
+                lines.push(kinds === 1 ? `${head} : ${segs.join(' ; ')}.` : `Transferts : ${head} — ${segs.join(' ; ')}.`);
+            }
+
+            if (has.car) {
+                const segs = cars.map((c) => `**${c.name}**, ${c.days || 0} jour${(c.days || 0) > 1 ? 's' : ''}`);
+                lines.push(`Location de véhicule : ${segs.join(' ; ')}${!has.acc && period ? ` (${period})` : ''}.`);
+            }
+
+            if (has.act) {
+                const segs = activities.map((a) => `${a.name}${a.pricingMode === 'pax' ? ` (${a.quantity || 0} pers.)` : ''}`);
+                lines.push(`Activité${activities.length > 1 ? 's' : ''} : ${segs.join(', ')}.`);
+                if (!has.acc && !has.car && period) lines.push(`Période : ${period}.`);
+            }
+
+            if (cities) lines.push(`Lieu(x) d’intervention : **${cities}**.`);
+            return { title, lines };
+        }
+
+        function ServiceSummaryText({ summary }) {
+            return <>{summary.lines.map((l, i) => <React.Fragment key={i}>{i > 0 && <br />}<RichLine text={l} /></React.Fragment>)}</>;
+        }
+
+        // Dates des trajets sous la désignation d'un transfert (tableaux imprimés)
+        const transferDatesText = (t) => {
+            const dated = (t.dates || []).slice(0, transportTripCount(t)).filter(Boolean).map(formatShortDateFR);
+            return dated.length ? `${transportTripCount(t)} trajet${transportTripCount(t) > 1 ? 's' : ''} · ${dated.join(', ')}` : '';
+        };
 
         function CompanyFooterLines({ company }) {
             const c = normalizeCompany(company);
