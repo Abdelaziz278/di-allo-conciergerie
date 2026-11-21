@@ -90,6 +90,10 @@
             body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
+            /* L'application est verrouillée en plein écran : on la libère à l'impression pour imprimer toutes les pages. */
+            html, body { position: static !important; overflow: visible !important; height: auto !important; width: auto !important; }
+            #root, #root > div, main { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+            #root > div { display: block !important; }
             @page { margin: 0; }
             .page-break-inside-avoid { page-break-inside: avoid; break-inside: avoid; }
         }
@@ -121,7 +125,7 @@
         .offer-page p, .offer-page h1, .offer-page h3, .offer-page figure { margin: 0; }
         .of-inner { position: absolute; inset: 0; padding: 13mm 16mm 0 16mm; display: flex; flex-direction: column; }
         .of-content { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-        .of-footer { flex: 0 0 auto; height: 13mm; border-top: 0.3mm solid var(--of-line); display: flex; align-items: center; justify-content: space-between; gap: 4mm;
+        .of-footer { flex: 0 0 auto; height: 19mm; border-top: 0.3mm solid var(--of-line); display: flex; align-items: center; justify-content: space-between; gap: 4mm;
             font-size: 6.3pt; color: var(--of-muted); letter-spacing: 0.08em; text-transform: uppercase; }
         .of-footer-center { flex: 1; text-align: center; }
         .of-footer-left { min-width: 30mm; display: flex; align-items: center; }
@@ -196,6 +200,31 @@
         .of-slogan { text-align: center; font-size: 19pt; line-height: 1.25; color: var(--of-dark); }
         .of-slogan em { font-style: italic; }
         .of-center { text-align: center; }
+        /* Pied de page répété sur chaque page des devis et factures imprimés */
+        .print-frame { width: 100%; border-collapse: collapse; }
+        .print-frame > thead > tr > td, .print-frame > tbody > tr > td, .print-frame > tfoot > tr > td { padding: 0; border: 0; }
+        .print-frame-top { height: 12mm; }
+        .print-frame-bottom { height: 28mm; }
+        .doc-footer { position: fixed; left: 0; right: 0; bottom: 0; height: 24mm; padding: 3mm 12mm 0; background: #fff; border-top: 0.6mm solid #b8975a;
+            text-align: center; font-size: 7.6pt; line-height: 1.5; color: #3f3832; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .doc-footer strong { color: #0e0d0c; letter-spacing: 0.12em; font-size: 8.2pt; }
+        .doc-footer .doc-footer-slogan { color: #7a6037; font-style: italic; font-weight: 700; margin-top: 0.6mm; }
+        .doc-footer { display: none; }
+        .doc-footer-preview { margin-top: 12mm; padding-top: 4mm; border-top: 2px solid #b8975a; text-align: center; font-size: 12px; line-height: 1.6; color: #3f3832; }
+        .doc-footer-preview strong { color: #0e0d0c; letter-spacing: 0.12em; }
+        .doc-footer-preview .doc-footer-slogan { color: #7a6037; font-style: italic; font-weight: 700; }
+        @media screen { .print-frame-top, .print-frame-bottom { height: 0; } }
+        @media print { .doc-footer { display: block; } .doc-footer-preview { display: none !important; } }
+        /* Pied des offres illustrées : coordonnées sur chaque page */
+        .of-footer-company { text-transform: none; letter-spacing: 0; font-size: 5.7pt; line-height: 1.38; color: var(--of-muted); }
+        .of-footer-company strong { color: var(--of-dark); letter-spacing: 0.08em; }
+        .of-footer-slogan { color: var(--of-brown); font-style: italic; font-weight: 700; }
+        .of-footer-right { min-width: 30mm; display: flex; flex-direction: column; align-items: flex-end; gap: 0.6mm; }
+        .of-footer-label { font-size: 5.6pt; letter-spacing: 0.08em; }
+        .of-footer-left-text { text-transform: none; letter-spacing: 0; font-size: 5.8pt; line-height: 1.35; }
+        .of-conditions { margin: 1.5mm 0 0; padding-left: 4mm; font-size: 6.9pt; color: var(--of-muted); }
+        .of-conditions li { margin-bottom: 0.8mm; }
         /* Aperçu à l'écran */
         .of-preview .offer-page { margin: 0 auto 10mm; box-shadow: 0 6px 30px rgba(15, 23, 42, 0.35); }
         .of-preview .offer-page[data-overflow="1"] { outline: 3px solid #dc2626; outline-offset: 2px; }
@@ -486,8 +515,10 @@
           const [quotes, saveQuotes, quoLoaded] = useSyncedState('quotes', [], user);
           const [orders, saveOrders, ordLoaded] = useSyncedState('orders', [], user);
           const [requests, saveRequests, reqLoaded] = useSyncedState('requests', [], user);
+          const [companyRaw, saveCompany, compLoaded] = useSyncedState('company', DEFAULT_COMPANY, user);
+          const company = normalizeCompany(companyRaw);
 
-          const isDataLoaded = logoLoaded && catLoaded && cliLoaded && quoLoaded && ordLoaded && reqLoaded;
+          const isDataLoaded = logoLoaded && catLoaded && cliLoaded && quoLoaded && ordLoaded && reqLoaded && compLoaded;
           const [currentPayload, setCurrentPayload] = useState(null);
           const [navKey, setNavKey] = useState(0);
 
@@ -643,9 +674,9 @@
                   
                   {currentView === 'quotes' && <QuotesListView quotes={quotes} clients={clients} onNewQuote={() => navigateTo('quote-builder')} onNewStayOffer={() => navigateTo('stay-offer')} onEdit={openQuote} onDuplicate={handleDuplicateQuote} onDelete={(id) => { saveQuotes(quotes.filter(quote => quote.id !== id)); }} onStatusChange={handleQuoteStatusChange} />}
                   
-                  {currentView === 'quote-builder' && <QuoteBuilderView clients={clients} catalog={catalog} logoUrl={logoUrl} payload={currentPayload} onOpenStayOffer={(prefill) => navigateTo('stay-offer', { prefill })} onSave={(q) => { if(currentPayload && currentPayload.quote && quotes.some(old => old.id === q.id)) { saveQuotes(quotes.map(old => old.id === q.id ? q : old)); } else { saveQuotes([q, ...quotes]); } navigateTo('quotes'); }} onCancel={() => navigateTo('quotes')} />}
+                  {currentView === 'quote-builder' && <QuoteBuilderView clients={clients} catalog={catalog} logoUrl={logoUrl} company={company} payload={currentPayload} onOpenStayOffer={(prefill) => navigateTo('stay-offer', { prefill })} onSave={(q) => { if(currentPayload && currentPayload.quote && quotes.some(old => old.id === q.id)) { saveQuotes(quotes.map(old => old.id === q.id ? q : old)); } else { saveQuotes([q, ...quotes]); } navigateTo('quotes'); }} onCancel={() => navigateTo('quotes')} />}
 
-                  {currentView === 'stay-offer' && <StayOfferBuilderView key={navKey} clients={clients} catalog={catalog} saveCatalog={saveCatalog} logoUrl={logoUrl} payload={currentPayload} quotes={quotes}
+                  {currentView === 'stay-offer' && <StayOfferBuilderView key={navKey} clients={clients} catalog={catalog} saveCatalog={saveCatalog} logoUrl={logoUrl} company={company} payload={currentPayload} quotes={quotes}
                       onSaveOffer={(q) => saveQuotes(upsertInList(quotes, q))}
                       onDuplicate={(q) => { const copy = makeQuoteCopy(q); saveQuotes([copy, ...upsertInList(quotes, q)]); navigateTo('stay-offer', { quote: copy }); }}
                       onGenerateFinal={(offerQuote, finalQuote) => { saveQuotes([finalQuote, ...upsertInList(quotes, offerQuote)]); navigateTo('quote-builder', { quote: finalQuote }); setTimeout(() => alert("Devis final " + finalQuote.id + " créé à partir de l'hébergement retenu.\nVérifiez-le puis passez-le en « Validé » pour créer la commande."), 150); }}
@@ -653,10 +684,10 @@
                   
                   {currentView === 'orders' && <OrdersView orders={orders} clients={clients} setOrders={saveOrders} onDeleteOrder={(id) => saveOrders(orders.filter(o => o.id !== id))} onNavigate={navigateTo} />}
                   {currentView === 'invoices' && <InvoicesListView orders={orders} clients={clients} onNavigate={navigateTo} />}
-                  {currentView === 'invoice' && <InvoiceView order={currentPayload?.order} clients={clients} logoUrl={logoUrl} onCancel={() => navigateTo('invoices')} />}
+                  {currentView === 'invoice' && <InvoiceView order={currentPayload?.order} clients={clients} logoUrl={logoUrl} company={company} onCancel={() => navigateTo('invoices')} />}
                   {currentView === 'catalog' && <CatalogAdminView catalog={catalog} setCatalog={saveCatalog} />}
                   
-                  {currentView === 'settings' && <SettingsView logoUrl={storedLogoUrl} logoBroken={storedLogoBroken} saveLogoUrl={saveLogoUrl} catalog={catalog} saveCatalog={saveCatalog} clients={clients} saveClients={saveClients} quotes={quotes} saveQuotes={saveQuotes} orders={orders} saveOrders={saveOrders} requests={requests} saveRequests={saveRequests} />}
+                  {currentView === 'settings' && <SettingsView logoUrl={storedLogoUrl} logoBroken={storedLogoBroken} saveLogoUrl={saveLogoUrl} company={company} saveCompany={saveCompany} catalog={catalog} saveCatalog={saveCatalog} clients={clients} saveClients={saveClients} quotes={quotes} saveQuotes={saveQuotes} orders={orders} saveOrders={saveOrders} requests={requests} saveRequests={saveRequests} />}
                 </div>
               </main>
 
@@ -1203,7 +1234,7 @@
           );
         }
 
-        function QuoteBuilderView({ clients, catalog, logoUrl, payload, onSave, onCancel, onOpenStayOffer }) {
+        function QuoteBuilderView({ clients, catalog, logoUrl, company, payload, onSave, onCancel, onOpenStayOffer }) {
           const existingQuote = payload ? payload.quote : null;
           const prospectId = payload ? payload.prospectId : null;
 
@@ -1241,6 +1272,10 @@
           // Nouveau mode « pourcentage » (devis finaux issus d'une offre illustrée). Les anciens devis restent en Auto / Manuel.
           const [feePercentMode, setFeePercentMode] = useState(!!(existingQuote && existingQuote.feeMode === 'percent'));
           const [feePercent, setFeePercent] = useState((existingQuote && existingQuote.feePercent != null) ? existingQuote.feePercent : 10);
+          // Conditions tarifaires propres à ce document (ajout / retrait / masquage)
+          const [pricingConditions, setPricingConditions] = useState(() => (existingQuote
+              ? normalizeConditions(existingQuote.pricingConditions, legacyQuoteConditions((existingQuote.accommodations || []).length > 0))
+              : defaultQuoteConditions(company)));
 
           const FEE_THRESHOLD_MAD = 40000; 
           const FLAT_FEE_MAD = 4000; 
@@ -1301,6 +1336,11 @@
           const finalFeeMAD = feePercentMode ? computeFee(subTotalMAD, feePercent) : (isAutoFee ? calcFeeMAD : (parseFloat(manualFeeMAD) || 0));
           const feeModeValue = feePercentMode ? 'percent' : (isAutoFee ? 'auto' : 'manual');
           const changeFeeMode = (mode) => { setFeePercentMode(mode === 'percent'); setIsAutoFee(mode === 'auto'); };
+          const feeConditionLines = feePercentMode
+              ? [`Honoraires ${normalizeCompany(company).name} : ${feePercent} % du coût total des prestations retenues pour le voyage, transfert compris s'il est réservé. Les honoraires sont facturés séparément.`]
+              : isAutoFee
+                  ? [`Si coût total ${accommodations.length > 0 ? 'du séjour' : 'des prestations'} > à 4 000 € : une commission de 10 % est prélevée sur le coût total.`, `Si coût total ${accommodations.length > 0 ? 'du séjour' : 'des prestations'} < à 4 000 € : forfait fixe de 400 € appliqué.`]
+                  : [`Honoraires ${normalizeCompany(company).name} : ${renderMoney(finalFeeMAD, currency)}${feeComment ? ' (' + feeComment + ')' : ''}.`];
           const travelersText = (existingQuote && existingQuote.travelersLabel && existingQuote.pax === pax) ? existingQuote.travelersLabel : `${pax} adulte(s)`;
           const totalMAD = subTotalMAD + finalFeeMAD;
 
@@ -1315,7 +1355,7 @@
               quoteCity, tripName, pax, currency, dateIn, dateOut, globalSeason,
               accommodations, activities, transports, cars,
               isAutoFee: feePercentMode ? false : isAutoFee, manualFeeMAD: feePercentMode ? finalFeeMAD : manualFeeMAD, feeComment: feePercentMode ? `${feePercent} % du coût total des prestations retenues` : feeComment,
-              feeMode: feeModeValue, feePercent,
+              feeMode: feeModeValue, feePercent, pricingConditions,
               total: totalMAD, subTotal: subTotalMAD, finalFee: finalFeeMAD,
               status: (existingQuote && existingQuote.status) ? existingQuote.status : 'Brouillon'
             };
@@ -1435,6 +1475,12 @@
                         <input type="number" min="1" value={pax} onChange={(e) => setPax(parseInt(e.target.value)||1)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-center" />
                       </div>
                     </div>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-scroll text-amber-600"></i> Conditions tarifaires</h3>
+                      <ConditionsEditor value={pricingConditions} onChange={setPricingConditions} feePreview={feeConditionLines.join(' / ')}
+                          onReset={() => { if (window.confirm('Remplacer les conditions de ce document par celles des Paramètres ?')) setPricingConditions(defaultQuoteConditions(company)); }} />
                   </div>
 
                   {docType === 'proposition' && onOpenStayOffer && (
@@ -1676,7 +1722,8 @@
               {/* === MODE IMPRESSION (PDF STYLE TEXT ONLY) === */}
               {/* ======================================================= */}
               
-              <div className="print-only w-full max-w-4xl mx-auto bg-white text-black p-10 font-sans">
+              <div className="print-only w-full max-w-4xl mx-auto bg-white text-black px-10 font-sans">
+                <PrintDocFrame company={company}>
                 
                 {/* Header Facture / Devis */}
                 <div className="flex justify-between items-start border-b-[3px] border-amber-500 pb-8 mb-10">
@@ -1792,33 +1839,19 @@
                     </div>
                 )}
 
-                {/* Footer Conditions */}
+                {/* Conditions tarifaires (modifiables dans le générateur) */}
+                {pricingConditions.show && pricingConditions.items.length > 0 && (
                 <div className="mt-16 pt-8 border-t-2 border-slate-200 text-sm text-slate-600 page-break-inside-avoid">
                   <h4 className="font-bold text-slate-900 mb-3 uppercase tracking-wider">Conditions Tarifaires & Services :</h4>
-                  <ul className="list-disc pl-5 space-y-2 mb-8">
-                    {feePercentMode ? (
-                      <li>Honoraires DI'ALLO Conciergerie : {feePercent} % du coût total des prestations retenues pour le voyage, transfert compris s'il est réservé. Les honoraires sont facturés séparément.</li>
-                    ) : (<>
-                    <li>Si Coût total {accommodations.length > 0 ? 'du séjour' : 'des prestations'} &gt; à 4 000 € : Une commission de 10% est prélevée sur le coût total.</li>
-                    <li>Si Coût total {accommodations.length > 0 ? 'du séjour' : 'des prestations'} &lt; à 4 000 € : Forfait fixe de 400 € appliqué.</li>
-                    </>)}
-                    <li><strong>Sont inclus dans le service :</strong> Conseil, orientation, conception personnalisée, accueil, assistance et accompagnement durant {accommodations.length > 0 ? 'tout le séjour' : 'vos prestations'}.</li>
+                  <ul className="list-disc pl-5 space-y-2">
+                    {pricingConditions.items.map((it) => it.type === 'fee'
+                        ? feeConditionLines.map((line, k) => <li key={it.id + k}>{line}</li>)
+                        : (it.text && it.text.trim() ? <li key={it.id}><RichLine text={it.text} /></li> : null))}
                   </ul>
-                  
-                  <div className="text-center bg-slate-900 text-white p-6 rounded-2xl mt-8">
-                    <p className="font-black tracking-widest text-lg uppercase mb-2">DI. ALLO CONCIERGERIE</p>
-                    <div className="text-slate-300 font-sans text-sm space-y-1 mb-3">
-                        <p>Téléphone : +212 640 872 736 / +212 674 570 084</p>
-                        <p>Mail : di.alloconciergerie@gmail.com</p>
-                    </div>
-                    <div className="text-slate-400 font-sans text-xs space-y-1">
-                        <p>ICE : 003102253000027</p>
-                        <p>Attijariwafa bank RIB : 007 780 0006669000305377 23</p>
-                    </div>
-                    <p className="text-amber-500 font-bold italic mt-4 text-sm">« DI. ALLO CONCIERGERIE et vos voyages deviennent plus sereins »</p>
-                  </div>
                 </div>
+                )}
 
+                </PrintDocFrame>
               </div>
             </div>
           );
@@ -1943,7 +1976,7 @@
           );
         }
 
-        function InvoiceView({ order, clients, logoUrl, onCancel }) {
+        function InvoiceView({ order, clients, logoUrl, company, onCancel }) {
             if (!order) return <div className="p-8 text-center text-slate-500">Aucune commande sélectionnée.</div>;
             
             const client = clients.find(c => c.id == order.clientId);
@@ -1985,7 +2018,8 @@
                     </div>
 
                     {/* Document Facture Printable */}
-                    <div className="w-full bg-white text-black p-10 shadow-lg border border-slate-200 font-sans print:shadow-none print:border-none print:p-0">
+                    <div className="w-full bg-white text-black p-10 shadow-lg border border-slate-200 font-sans print:shadow-none print:border-none print:py-0 print:px-[12mm]">
+                        <PrintDocFrame company={company}>
                         {/* Header Facture */}
                         <div className="flex justify-between items-start border-b-[3px] border-amber-500 pb-8 mb-10">
                             <div className="flex items-center gap-6">
@@ -2095,24 +2129,15 @@
                             </div>
                         </div>
 
-                        {/* Footer Conditions */}
+                        {/* Conditions de règlement (Paramètres) */}
+                        {normalizeCompany(company).paymentConditions.trim() && (
                         <div className="mt-16 pt-8 border-t-2 border-slate-200 text-sm text-slate-600 page-break-inside-avoid">
                             <h4 className="font-bold text-slate-900 mb-3 uppercase tracking-wider">Conditions de Règlement :</h4>
-                            <p className="mb-8">Le règlement de cette facture valide les prestations ci-dessus. Tout paiement doit être effectué sur les coordonnées bancaires indiquées ci-dessous.</p>
-                            
-                            <div className="text-center bg-slate-900 text-white p-6 rounded-2xl mt-8">
-                                <p className="font-black tracking-widest text-lg uppercase mb-2">DI. ALLO CONCIERGERIE</p>
-                                <div className="text-slate-300 font-sans text-sm space-y-1 mb-3">
-                                    <p>Téléphone : +212 640 872 736 / +212 674 570 084</p>
-                                    <p>Mail : di.alloconciergerie@gmail.com</p>
-                                </div>
-                                <div className="text-slate-400 font-sans text-xs space-y-1">
-                                    <p>ICE : 003102253000027</p>
-                                    <p>Attijariwafa bank RIB : 007 780 0006669000305377 23</p>
-                                </div>
-                                <p className="text-amber-500 font-bold italic mt-4 text-sm">« DI. ALLO CONCIERGERIE et vos voyages deviennent plus sereins »</p>
-                            </div>
+                            <p className="whitespace-pre-line"><RichLine text={normalizeCompany(company).paymentConditions} /></p>
                         </div>
+                        )}
+                        </PrintDocFrame>
+                        <div className="doc-footer-preview no-print"><CompanyFooterLines company={company} /></div>
 
                     </div>
                 </div>
@@ -2373,6 +2398,69 @@
           );
         }
 
+        function CompanySettingsCard({ company, saveCompany }) {
+            const [draft, setDraft] = useState(() => normalizeCompany(company));
+            const [saved, setSaved] = useState(false);
+            useEffect(() => { setDraft(normalizeCompany(company)); }, [JSON.stringify(company)]);
+            const set = (k) => (e) => { setDraft({ ...draft, [k]: e.target.value }); setSaved(false); };
+            const conditionsValue = { show: true, items: [
+                ...(draft.includeFeeCondition ? [{ id: 'fee', type: 'fee' }] : []),
+                ...draft.pricingConditions.map((text, i) => ({ id: 'p' + i, type: 'text', text })),
+            ] };
+            const onConditions = (v) => {
+                setDraft({ ...draft, includeFeeCondition: v.items.some((i) => i.type === 'fee'), pricingConditions: v.items.filter((i) => i.type === 'text').map((i) => i.text) });
+                setSaved(false);
+            };
+            const save = () => {
+                saveCompany({ ...draft, pricingConditions: draft.pricingConditions.filter((t) => t && t.trim()) });
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2500);
+            };
+            const field = (k, label, opts = {}) => (
+                <div className={opts.full ? 'md:col-span-2' : ''}>
+                    <label className="block text-xs font-bold mb-1 text-slate-600">{label}</label>
+                    <input type="text" value={draft[k] || ''} onChange={set(k)} placeholder={opts.placeholder || ''} className="w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 text-sm outline-none focus:border-amber-500" />
+                </div>
+            );
+            return (
+                <div className="bg-white p-8 rounded-2xl shadow border border-slate-100 max-w-2xl mt-6 space-y-6">
+                    <div>
+                        <h3 className="font-bold text-lg mb-1 text-slate-800 flex items-center gap-2"><i className="ph ph-identification-card"></i> Coordonnées et pied de page</h3>
+                        <p className="text-sm text-slate-500 mb-4">Imprimées en pied de page de chaque page des devis, factures et offres illustrées.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {field('name', 'Nom de la société', { full: true })}
+                            {field('phones', 'Téléphone(s)')}
+                            {field('email', 'Mail')}
+                            {field('ice', 'ICE')}
+                            {field('bank', 'Banque')}
+                            {field('rib', 'RIB', { full: true })}
+                            {field('website', 'Site web')}
+                            {field('slogan', 'Slogan (sans guillemets)')}
+                        </div>
+                        <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-white">
+                            <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">Aperçu du pied de page</p>
+                            <div className="doc-footer-preview" style={{ marginTop: 0 }}><CompanyFooterLines company={draft} /></div>
+                        </div>
+                    </div>
+                    <div className="pt-4 border-t border-slate-100">
+                        <h3 className="font-bold text-lg mb-1 text-slate-800 flex items-center gap-2"><i className="ph ph-scroll"></i> Conditions tarifaires par défaut</h3>
+                        <p className="text-sm text-slate-500 mb-3">Reprises dans chaque nouveau devis et chaque nouvelle offre. Vous pouvez ensuite les ajouter, les retirer ou les masquer document par document. Les documents déjà créés ne changent pas.</p>
+                        <ConditionsEditor value={conditionsValue} onChange={onConditions} hideToggle
+                            feePreview="calculé dans chaque devis selon le mode d’honoraires (Auto, Pourcentage ou Manuel)." />
+                    </div>
+                    <div className="pt-4 border-t border-slate-100">
+                        <h3 className="font-bold text-lg mb-1 text-slate-800 flex items-center gap-2"><i className="ph ph-receipt"></i> Conditions de règlement (factures)</h3>
+                        <textarea rows={3} value={draft.paymentConditions} onChange={set('paymentConditions')} placeholder="Laisser vide pour ne pas afficher cette rubrique" className="w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 text-sm outline-none focus:border-amber-500" />
+                    </div>
+                    <div className="flex items-center justify-end gap-3">
+                        {saved && <span className="text-sm font-bold text-emerald-600"><i className="ph ph-check-circle"></i> Enregistré</span>}
+                        <button onClick={() => { if (window.confirm('Revenir aux coordonnées et conditions d’origine ?')) { setDraft(normalizeCompany(DEFAULT_COMPANY)); setSaved(false); } }} className="px-4 py-2 rounded-lg bg-slate-100 font-bold text-sm">Valeurs d’origine</button>
+                        <button onClick={save} className="px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-sm">Enregistrer</button>
+                    </div>
+                </div>
+            );
+        }
+
         // Champs supplémentaires d'une fiche hébergement, utilisés par les offres illustrées (tous facultatifs).
         function CatalogAccommodationSheet({ data, onChange }) {
             const kind = OFFER_KINDS[data.category] ? data.category : kindFromType(data.type);
@@ -2617,7 +2705,7 @@
             );
         }
 
-        function SettingsView({ logoUrl, logoBroken, saveLogoUrl, catalog, saveCatalog, clients, saveClients, quotes, saveQuotes, orders, saveOrders, requests, saveRequests }) {
+        function SettingsView({ logoUrl, logoBroken, saveLogoUrl, company, saveCompany, catalog, saveCatalog, clients, saveClients, quotes, saveQuotes, orders, saveOrders, requests, saveRequests }) {
             const handleLogoUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -2759,6 +2847,9 @@
                     <p className="text-xs text-slate-500 mt-1 text-center">Version pour fond noir (menu de l’application).</p>
                 </div>
 
+                {/* Coordonnées, pied de page et conditions par défaut */}
+                <CompanySettingsCard company={company} saveCompany={saveCompany} />
+
                 {/* Import/Export Section */}
                 <div className="bg-white p-8 rounded-2xl shadow border border-slate-100 max-w-2xl mt-6">
                     <h3 className="font-bold text-lg mb-2 text-slate-800 flex items-center gap-2"><i className="ph ph-hard-drives"></i> Sauvegarde & Cloud</h3>
@@ -2797,12 +2888,6 @@
         // avec offerKind 'illustree' et un instantané complet dans quote.stayOffer.
         // Les hébergements sont des choix alternatifs : seul l'option retenue passe dans le devis final.
 
-        const COMPANY_INFO = {
-            name: 'DI’ALLO Conciergerie',
-            phones: ['+212 640 872 736', '+212 674 570 084'],
-            email: 'di.alloconciergerie@gmail.com',
-            website: 'di-alloconciergerie.com',
-        };
         const OFFER_KINDS = {
             location: { label: 'Location courte durée', kicker: 'Location courte durée' },
             hotel: { label: 'Hôtel', kicker: 'Hôtel' },
@@ -2971,6 +3056,7 @@
             confirmText: 'Indiquez-nous votre hébergement préféré et, le cas échéant, l’âge des enfants. Nous vérifierons la disponibilité, le couchage, les tarifs applicables et les conditions d’annulation avant de vous proposer la réservation.',
             conditionsText: 'Tarifs sous réserve de disponibilité et de confirmation pour les dates du séjour. La réservation est effective après validation et règlement de l’acompte demandé.',
             issuedDate: '', reference: '', selection: null,
+            showFeeNote: true, conditions: null,
         };
         const OPTION_DEFAULTS = {
             uid: '', source: 'manual', catalogId: null, kind: 'location', type: 'Appartement',
@@ -3008,6 +3094,10 @@
             so.feePercent = so.feePercent === '' || so.feePercent === null || isNaN(Number(so.feePercent)) ? 10 : Number(so.feePercent);
             if (!SEASON_LABELS[so.season]) so.season = 'moyenne';
             if (!EXCHANGE_RATES[so.currency]) so.currency = 'MAD';
+            so.showFeeNote = so.showFeeNote !== false;
+            // Anciennes offres : le texte « conditions » devient la première ligne de la liste.
+            so.conditions = normalizeConditions(so.conditions, { show: true, items: (so.conditionsText || '').trim() ? [{ id: condId(), type: 'text', text: so.conditionsText }] : [] });
+            so.conditions.items = so.conditions.items.filter((i) => i.type === 'text');
             return so;
         };
 
@@ -3035,7 +3125,7 @@
             return airport.find((t) => destination && cityKey(t.name).includes(cityKey(destination).slice(0, 4))) || null;
         };
 
-        const createDefaultStayOffer = ({ client, prefill, catalog }) => {
+        const createDefaultStayOffer = ({ client, prefill, catalog, company }) => {
             const p = prefill || {};
             const pData = client && client.prospectData ? client.prospectData : null;
             const destination = p.destination || (pData && pData.dest && cityKey(pData.dest) !== 'maroc' ? pData.dest : '') || '';
@@ -3058,6 +3148,8 @@
                 },
                 issuedDate, reference: makeOfferReference(client, issuedDate),
             });
+            so.conditions = { show: true, items: [STAY_OFFER_DEFAULTS.conditionsText, ...normalizeCompany(company).pricingConditions]
+                .filter((t) => t && String(t).trim()).map((text) => ({ id: condId(), type: 'text', text })) };
             so.options = (p.catalogIds || [])
                 .map((id) => ((catalog && catalog.accommodations) || []).find((a) => a.id == id))
                 .filter(Boolean)
@@ -3111,6 +3203,122 @@
                 status: 'Brouillon', sourceOfferId: offerQuote.id, sourceOptionUid: option.uid,
             };
         };
+
+        // ---------- Coordonnées société, pied de page et conditions tarifaires ----------
+        const DEFAULT_COMPANY = {
+            name: 'DI. ALLO CONCIERGERIE',
+            phones: '+212 640 872 736 / +212 674 570 084',
+            email: 'di.alloconciergerie@gmail.com',
+            ice: '003102253000027',
+            bank: 'Attijariwafa bank',
+            rib: '007 780 0006669000305377 23',
+            slogan: 'DI. ALLO CONCIERGERIE et vos voyages deviennent plus sereins',
+            website: 'di-alloconciergerie.com',
+            includeFeeCondition: true,
+            pricingConditions: ['**Sont inclus dans le service :** Conseil, orientation, conception personnalisée, accueil, assistance et accompagnement durant tout le séjour.'],
+            paymentConditions: 'Le règlement de cette facture valide les prestations ci-dessus. Tout paiement doit être effectué sur les coordonnées bancaires indiquées ci-dessous.',
+        };
+        const normalizeCompany = (c) => {
+            const src = c && typeof c === 'object' ? c : {};
+            return { ...DEFAULT_COMPANY, ...src, pricingConditions: Array.isArray(src.pricingConditions) ? src.pricingConditions : DEFAULT_COMPANY.pricingConditions };
+        };
+        const sloganText = (s) => String(s || '').trim().replace(/^«\s*/, '').replace(/\s*»$/, '');
+        const condId = () => 'c' + offerUid();
+        // Conditions d'un nouveau devis : reprises des Paramètres.
+        const defaultQuoteConditions = (company) => {
+            const c = normalizeCompany(company);
+            return { show: true, items: [
+                ...(c.includeFeeCondition ? [{ id: condId(), type: 'fee' }] : []),
+                ...c.pricingConditions.filter((t) => t && String(t).trim()).map((text) => ({ id: condId(), type: 'text', text })),
+            ] };
+        };
+        // Anciens devis (sans réglage) : mêmes conditions qu'avant la mise à jour.
+        const legacyQuoteConditions = (hasAccommodations) => ({ show: true, items: [
+            { id: 'fee', type: 'fee' },
+            { id: 'incl', type: 'text', text: `**Sont inclus dans le service :** Conseil, orientation, conception personnalisée, accueil, assistance et accompagnement durant ${hasAccommodations ? 'tout le séjour' : 'vos prestations'}.` },
+        ] });
+        const normalizeConditions = (v, fallback) => {
+            if (!v || typeof v !== 'object' || !Array.isArray(v.items)) return fallback;
+            return { show: v.show !== false, items: v.items.filter((i) => i && (i.type === 'fee' || typeof i.text === 'string')).map((i) => ({ id: i.id || condId(), type: i.type === 'fee' ? 'fee' : 'text', text: i.text || '' })) };
+        };
+        // **texte** -> gras
+        function RichLine({ text }) {
+            return <>{String(text || '').split('**').map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : <React.Fragment key={i}>{part}</React.Fragment>))}</>;
+        }
+
+        function CompanyFooterLines({ company }) {
+            const c = normalizeCompany(company);
+            const contact = [c.phones && `Téléphone : ${c.phones}`, c.email && `Mail : ${c.email}`].filter(Boolean).join('   ·   ');
+            const legal = [c.ice && `ICE : ${c.ice}`, c.bank, c.rib && `RIB : ${c.rib}`].filter(Boolean).join('   ·   ');
+            return (
+                <>
+                    {c.name && <div><strong>{c.name}</strong></div>}
+                    {contact && <div>{contact}</div>}
+                    {legal && <div>{legal}</div>}
+                    {sloganText(c.slogan) && <div className="doc-footer-slogan">« {sloganText(c.slogan)} »</div>}
+                </>
+            );
+        }
+
+        // Cadre d'impression : marge haute et pied de page répétés sur chaque page.
+        function PrintDocFrame({ company, children }) {
+            return (
+                <>
+                    <table className="print-frame">
+                        <thead><tr><td><div className="print-frame-top"></div></td></tr></thead>
+                        <tbody><tr><td>{children}</td></tr></tbody>
+                        <tfoot><tr><td><div className="print-frame-bottom"></div></td></tr></tfoot>
+                    </table>
+                    <div className="doc-footer"><CompanyFooterLines company={company} /></div>
+                </>
+            );
+        }
+
+        function ConditionsEditor({ value, onChange, feePreview, onReset, title, hint, hideToggle }) {
+            const v = value || { show: true, items: [] };
+            const items = v.items || [];
+            const set = (patch) => onChange({ ...v, ...patch });
+            const setText = (id, text) => set({ items: items.map((it) => (it.id === id ? { ...it, text } : it)) });
+            const remove = (id) => set({ items: items.filter((it) => it.id !== id) });
+            const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; const next = [...items]; [next[i], next[j]] = [next[j], next[i]]; set({ items: next }); };
+            const hasFee = items.some((it) => it.type === 'fee');
+            return (
+                <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        {hideToggle ? <span></span> : <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                            <input type="checkbox" checked={v.show} onChange={(e) => set({ show: e.target.checked })} className="accent-amber-500 w-4 h-4" />
+                            {title || 'Afficher les conditions tarifaires sur le document'}
+                        </label>}
+                        {onReset && <button type="button" onClick={onReset} className="text-xs font-bold text-slate-500 hover:text-slate-800 underline">Rétablir les conditions par défaut</button>}
+                    </div>
+                    {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
+                    <div className={`space-y-2 ${v.show ? '' : 'opacity-40 pointer-events-none'}`}>
+                        {items.length === 0 && <p className="text-xs text-slate-400 italic">Aucune condition : la rubrique ne sera pas imprimée.</p>}
+                        {items.map((it, i) => (
+                            <div key={it.id} className="flex items-start gap-2">
+                                <div className="flex flex-col pt-1 text-slate-400">
+                                    <button type="button" title="Monter" onClick={() => move(i, -1)} disabled={i === 0} className="disabled:opacity-25 hover:text-slate-800"><i className="ph ph-caret-up"></i></button>
+                                    <button type="button" title="Descendre" onClick={() => move(i, 1)} disabled={i === items.length - 1} className="disabled:opacity-25 hover:text-slate-800"><i className="ph ph-caret-down"></i></button>
+                                </div>
+                                {it.type === 'fee' ? (
+                                    <div className="flex-1 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-slate-700">
+                                        <span className="font-bold text-amber-800">Honoraires (texte automatique selon le mode choisi) :</span> {feePreview}
+                                    </div>
+                                ) : (
+                                    <textarea rows={2} value={it.text} onChange={(e) => setText(it.id, e.target.value)} placeholder="Ex. Acompte de 30 % à la réservation, solde 15 jours avant l’arrivée." className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-500" />
+                                )}
+                                <button type="button" title="Retirer" onClick={() => remove(it.id)} className="pt-2 text-red-400 hover:text-red-600"><i className="ph ph-trash text-lg"></i></button>
+                            </div>
+                        ))}
+                        <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => set({ items: [...items, { id: condId(), type: 'text', text: '' }] })} className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg hover:bg-amber-100"><i className="ph ph-plus"></i> Ajouter une condition</button>
+                            {feePreview !== undefined && !hasFee && <button type="button" onClick={() => set({ items: [{ id: condId(), type: 'fee' }, ...items] })} className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg hover:bg-slate-200"><i className="ph ph-plus"></i> Remettre la ligne Honoraires</button>}
+                        </div>
+                        <p className="text-[10px] text-slate-400">Astuce : entourez un texte de ** pour le mettre en gras, par exemple **Acompte :**.</p>
+                    </div>
+                </div>
+            );
+        }
 
         // ---------- Stockage des photos importées ----------
         // Les photos importées ne sont PAS stockées dans le catalogue ni dans les devis (limite Firestore de 1 Mo
@@ -3261,7 +3469,7 @@
             );
         }
 
-        function buildOfferViewModel(so, { client, logoUrl }) {
+        function buildOfferViewModel(so, { client, logoUrl, company }) {
             const nights = nightsBetween(so.dateIn, so.dateOut);
             const currency = so.currency || 'MAD';
             const money = (v) => formatOfferAmount(v, currency);
@@ -3294,11 +3502,11 @@
             else pages.push({ type: 'recap', part: 'all' });
             pages.push({ type: 'closing' });
             return {
-                so, nights, currency, money, dest, clientLabel, options, pages, totalPages: pages.length, logoUrl,
+                so, nights, currency, money, dest, clientLabel, options, pages, totalPages: pages.length, logoUrl, company: normalizeCompany(company),
                 title: offerTitle(so), intro: offerIntro(so), travelers: travelersLabel(so.adults, so.children, so.childrenAges),
                 stayRange: formatStayRange(so.dateIn, so.dateOut), issued: formatLongDateFR(so.issuedDate || todayISO()), reference: so.reference,
                 cover: so.coverPhoto, closing: so.closingSameAsCover ? so.coverPhoto : so.closingPhoto,
-                footerLabel: `Offre de séjour${clientLabel ? ' • ' + clientLabel : ''}`,
+                footerLabel: `Offre de séjour${clientLabel ? ' · ' + clientLabel : ''}`,
             };
         }
 
@@ -3310,19 +3518,20 @@
                         {kicker && <div className="of-kicker">{kicker}</div>}
                         <div className="of-content">{children}</div>
                         <div className="of-footer">
-                            {footer === 'cover' && <>
-                                <span style={{ textTransform: 'none', letterSpacing: 0 }}>Proposition du {vm.issued}{vm.reference ? ` · Réf. ${vm.reference}` : ''}</span>
+                            <span className="of-footer-left">
+                                {footer === 'cover' && <span className="of-footer-left-text">Proposition du {vm.issued}{vm.reference ? <><br />Réf. {vm.reference}</> : null}</span>}
+                                {footer === 'standard' && <OfferLogo logoUrl={vm.logoUrl} height="6.5mm" />}
+                                {footer === 'closing' && <span className="of-footer-left-text">{vm.company.website}</span>}
+                            </span>
+                            <div className="of-footer-center of-footer-company">
+                                {vm.company.name && <div><strong>{vm.company.name}</strong>{vm.company.phones ? ` · Tél. ${vm.company.phones}` : ''}{vm.company.email ? ` · ${vm.company.email}` : ''}</div>}
+                                {(vm.company.ice || vm.company.rib) && <div>{[vm.company.ice && `ICE ${vm.company.ice}`, vm.company.bank, vm.company.rib && `RIB ${vm.company.rib}`].filter(Boolean).join(' · ')}</div>}
+                                {sloganText(vm.company.slogan) && <div className="of-footer-slogan">« {sloganText(vm.company.slogan)} »</div>}
+                            </div>
+                            <span className="of-footer-right">
+                                {footer === 'standard' && <span className="of-footer-label">{vm.footerLabel}</span>}
                                 <span className="of-pageno">{pageNo}</span>
-                            </>}
-                            {footer === 'closing' && <>
-                                <span className="of-footer-center" style={{ textAlign: 'left' }}>{COMPANY_INFO.website}</span>
-                                <span className="of-pageno">{pageNo}</span>
-                            </>}
-                            {footer === 'standard' && <>
-                                <span className="of-footer-left"><OfferLogo logoUrl={vm.logoUrl} height="6.5mm" /></span>
-                                <span className="of-footer-center">{vm.footerLabel}</span>
-                                <span className="of-pageno">{pageNo}</span>
-                            </>}
+                            </span>
                         </div>
                     </div>
                 </section>
@@ -3433,10 +3642,10 @@
             const routeText = (t.route || '').trim();
             return (
                 <>
-                    <div className="of-feebox">
+                    {vm.so.showFeeNote && <div className="of-feebox">
                         <div className="of-label">Honoraires DI’ALLO Conciergerie</div>
                         <p>Les honoraires de conciergerie sont facturés séparément et correspondent à {pct} % du coût total des prestations retenues pour le voyage{t.enabled ? ', transfert compris si vous le réservez' : ''}.</p>
-                    </div>
+                    </div>}
                     {t.enabled && (
                         <div className="of-transfer">
                             {t.photo && t.photo.src && <div className="of-transfer-photo"><OfferPhoto photo={t.photo} label="Transfert" showCaption={false} /></div>}
@@ -3450,15 +3659,14 @@
                     )}
                     <h3 className="of-h3" style={{ marginTop: '5mm' }}>Pour confirmer votre réservation</h3>
                     <p className="of-text">{vm.so.confirmText}</p>
-                    <p className="of-small" style={{ marginTop: '3mm' }}>{vm.so.conditionsText}</p>
-                    <div className="of-contact">
-                        <div>
-                            <strong>{COMPANY_INFO.name}</strong><br />
-                            {COMPANY_INFO.phones.join(' · ')}<br />
-                            {COMPANY_INFO.email}
+                    {vm.so.conditions.show && vm.so.conditions.items.some((i) => i.text && i.text.trim()) && (
+                        <div style={{ marginTop: '4mm' }}>
+                            <div className="of-label">Conditions</div>
+                            <ul className="of-conditions">
+                                {vm.so.conditions.items.filter((i) => i.text && i.text.trim()).map((i) => <li key={i.id}><RichLine text={i.text} /></li>)}
+                            </ul>
                         </div>
-                        <div style={{ color: 'var(--of-brown)', fontWeight: 700 }}>{COMPANY_INFO.website}</div>
-                    </div>
+                    )}
                 </>
             );
         }
@@ -3916,7 +4124,7 @@
         }
 
         // ---------- Générateur d'offre ----------
-        function StayOfferBuilderView({ clients, catalog, saveCatalog, logoUrl, payload, quotes, onSaveOffer, onGenerateFinal, onDuplicate, onCancel }) {
+        function StayOfferBuilderView({ clients, catalog, saveCatalog, logoUrl, company, payload, quotes, onSaveOffer, onGenerateFinal, onDuplicate, onCancel }) {
             const existing = payload && payload.quote && payload.quote.stayOffer ? payload.quote : null;
             const prefill = payload && payload.prefill ? payload.prefill : null;
             const initialClientId = existing ? existing.clientId : ((payload && payload.prospectId) || (prefill && prefill.clientId) || (clients[0] ? clients[0].id : ''));
@@ -3927,7 +4135,7 @@
             const [clientId, setClientId] = useState(initialClientId);
             const [so, setSo] = useState(() => (existing
                 ? normalizeStayOffer(deepClone(existing.stayOffer))
-                : createDefaultStayOffer({ client: clients.find((c) => c.id == initialClientId), prefill, catalog })));
+                : createDefaultStayOffer({ client: clients.find((c) => c.id == initialClientId), prefill, catalog, company })));
             const [savedOnce, setSavedOnce] = useState(!!existing);
             const [dirty, setDirty] = useState(!existing);
             const [openUid, setOpenUid] = useState(null);
@@ -4105,7 +4313,7 @@
             });
             if (so.transfer.enabled && !toNumberOrNull(so.transfer.price)) warnings.push('Transfert sans tarif : affiché « Sur demande ».');
 
-            const vm = buildOfferViewModel(so, { client, logoUrl });
+            const vm = buildOfferViewModel(so, { client, logoUrl, company });
             const fileName = ['Offre_Sejour', so.destination, vm.clientLabel].filter(Boolean).join('_').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_');
             const locOptions = so.options.filter((o) => offerGroup(o.kind) === 'location');
             const hotelOptions = so.options.filter((o) => offerGroup(o.kind) !== 'location');
@@ -4252,7 +4460,12 @@
                                     <OfField label="Date de la proposition" className="md:col-span-2"><input type="date" value={so.issuedDate} onChange={(e) => update({ issuedDate: e.target.value })} className={ofInput} /></OfField>
                                 </div>
                                 <OfField label="Pour confirmer votre réservation"><textarea rows={3} value={so.confirmText} onChange={(e) => update({ confirmText: e.target.value })} className={ofInput} /></OfField>
-                                <OfField label="Conditions"><textarea rows={2} value={so.conditionsText} onChange={(e) => update({ conditionsText: e.target.value })} className={ofInput} /></OfField>
+                                <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={so.showFeeNote} onChange={(e) => update({ showFeeNote: e.target.checked })} className="accent-amber-500 w-4 h-4" /> Afficher la note sur les honoraires sous le récapitulatif</label>
+                                <div className="pt-2 border-t border-slate-100">
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase mb-2">Conditions tarifaires</p>
+                                    <ConditionsEditor value={so.conditions} onChange={(conditions) => update({ conditions })} title="Afficher les conditions dans le PDF"
+                                        onReset={() => { if (window.confirm('Remplacer les conditions de cette offre par celles des Paramètres ?')) update({ conditions: { show: true, items: [STAY_OFFER_DEFAULTS.conditionsText, ...normalizeCompany(company).pricingConditions].filter((t) => t && String(t).trim()).map((text) => ({ id: condId(), type: 'text', text })) } }); }} />
+                                </div>
                             </div>
                         </div>
 
