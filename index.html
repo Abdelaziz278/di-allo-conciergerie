@@ -38,8 +38,8 @@
     <!-- Module Firebase (Cloud) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, browserLocalPersistence, setPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION CLOUD (FIREBASE) ---
         let firebaseConfig;
@@ -73,6 +73,14 @@
             window.fbGetDoc = getDoc;
             window.fbCollection = collection;
             window.fbOnSnapshot = onSnapshot;
+            // Connexion administrateur (e-mail + mot de passe) et demandes envoyées depuis le formulaire public / le site.
+            window.fbSignInWithEmail = signInWithEmailAndPassword;
+            window.fbSignOut = signOut;
+            window.fbSendPasswordReset = sendPasswordResetEmail;
+            window.fbAddDoc = addDoc;
+            window.fbDeleteDoc = deleteDoc;
+            window.fbServerTimestamp = serverTimestamp;
+            setPersistence(window.fbAuth, browserLocalPersistence).catch(() => {});
 
             window.dispatchEvent(new Event('firebase-ready'));
         } catch(e) {
@@ -278,6 +286,15 @@
         // ==========================================
         const EXCHANGE_RATES = { MAD: 1, FCFA: 62.5, EUR: 0.1 };
 
+        // Champs acceptés pour une demande publique (formulaire #formulaire et site web).
+        // Doit rester identique à la liste des règles Firestore (website_requests).
+        const PUBLIC_REQUEST_FIELDS = [
+            'firstName', 'lastName', 'email', 'phone', 'country', 'lang',
+            'dest', 'dateIn', 'dateOut', 'pax', 'tripType', 'arrivalAirport',
+            'accom', 'accomCategory', 'pace', 'food', 'budget', 'acts',
+            'trans', 'car', 'celebration', 'requests', 'offerRef', 'offerTitle'
+        ];
+
         const initialCatalog = {
           accommodations: [
             { id: 'h1', city: 'Casa', name: 'Studio Chambre + Salon', type: 'Studio', pricingMode: 'nuit', prices: { basse: 500, moyenne: 650, haute: 900 } },
@@ -470,6 +487,7 @@
           const [currentView, setCurrentView] = useState('dashboard');
           const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
           const [user, setUser] = useState(null);
+          const [authChecked, setAuthChecked] = useState(false);
 
           // Détection du mode public (Formulaire seul pour les clients)
           const [isPublicForm, setIsPublicForm] = useState(window.location.hash === '#formulaire');
@@ -487,12 +505,18 @@
                   try {
                       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                           await fbSignInWithCustomToken(fbAuth, __initial_auth_token);
-                      } else {
-                          await fbSignInAnonymously(fbAuth);
                       }
-                      fbOnAuthStateChanged(fbAuth, setUser);
-                  } catch(e) { console.error(e); }
+                      // Plus de connexion anonyme : l'administration exige une connexion e-mail + mot de passe.
+                      // Un ancien compte anonyme encore mémorisé est déconnecté.
+                      fbOnAuthStateChanged(fbAuth, (u) => {
+                          if (u && u.isAnonymous && window.fbSignOut) { window.fbSignOut(fbAuth); return; }
+                          setUser(u);
+                          setAuthChecked(true);
+                      });
+                  } catch(e) { console.error(e); setAuthChecked(true); }
               };
+              // Si Firebase ne répond pas (réseau coupé), on affiche quand même l'écran de connexion au bout de 8 s.
+              setTimeout(() => setAuthChecked(true), 8000);
               if (window.fbAuth) initFb();
               else window.addEventListener('firebase-ready', initFb);
               return () => window.removeEventListener('firebase-ready', initFb);
@@ -517,6 +541,65 @@
           const [requests, saveRequests, reqLoaded] = useSyncedState('requests', [], user);
           const [companyRaw, saveCompany, compLoaded] = useSyncedState('company', DEFAULT_COMPANY, user);
           const company = normalizeCompany(companyRaw);
+
+          // --- Demandes publiques (formulaire #formulaire et futur site web) ---
+          // Le public ne lit jamais les données du CRM : il dépose seulement une demande dans une file d'attente
+          // (website_requests). Une fois connecté, le CRM copie ces demandes dans « Demandes Clients » puis vide la file.
+          const websiteRequestsCol = () => window.fbCollection(window.fbDb, 'artifacts', window.fbAppId, 'public', 'data', 'website_requests');
+          const submitPublicRequest = async (data, source) => {
+              if (!window.fbDb || !window.fbAddDoc) throw new Error('Firebase indisponible');
+              const clean = {};
+              PUBLIC_REQUEST_FIELDS.forEach((k) => {
+                  const v = data ? data[k] : undefined;
+                  if (v === undefined || v === null || v === '') return;
+                  clean[k] = typeof v === 'number' ? v : String(v).slice(0, 2000);
+              });
+              clean.source = String(source || 'formulaire').slice(0, 40);
+              clean.createdAt = window.fbServerTimestamp();
+              await window.fbAddDoc(websiteRequestsCol(), clean);
+          };
+
+          const requestsRef = useRef(requests);
+          useEffect(() => { requestsRef.current = requests; }, [requests]);
+          useEffect(() => {
+              if (!user || !reqLoaded || !window.fbDb || !window.fbOnSnapshot) return;
+              const requestsDocRef = window.fbDoc(window.fbDb, 'artifacts', window.fbAppId, 'public', 'data', 'shared_workspace', 'requests');
+              const unsub = window.fbOnSnapshot(websiteRequestsCol(), async (snap) => {
+                  if (snap.empty) return;
+                  try {
+                      // Toujours repartir de la liste enregistrée dans le cloud (et non de l'écran, qui peut
+                      // ne pas être encore chargé juste après la connexion) pour ne jamais écraser de demandes.
+                      const cloudSnap = await window.fbGetDoc(requestsDocRef);
+                      const cloudList = cloudSnap.exists() ? cloudSnap.data().value : null;
+                      const current = Array.isArray(cloudList) ? cloudList : (requestsRef.current || []);
+                      const known = new Set(current.map((r) => String(r.id)));
+                      const incoming = [];
+                      snap.docs.forEach((d) => {
+                          if (known.has(d.id)) return;
+                          const { createdAt, ...rest } = d.data();
+                          const created = createdAt && createdAt.toDate ? createdAt.toDate() : new Date();
+                          incoming.push({ ...rest, id: d.id, receivedAt: created.toISOString(), date: created.toLocaleDateString('fr-FR') });
+                      });
+                      if (incoming.length) {
+                          incoming.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
+                          const next = [...incoming, ...current];
+                          requestsRef.current = next;
+                          // On attend que la copie soit bien enregistrée dans le cloud avant de vider la file d'attente.
+                          await window.fbSetDoc(requestsDocRef, { value: next });
+                          saveRequests(next);
+                      }
+                      await Promise.all(snap.docs.map((d) => window.fbDeleteDoc(d.ref)));
+                  } catch (e) {
+                      console.error('Import des demandes du site impossible', e);
+                  }
+              }, (err) => console.error('Demandes du site :', err));
+              return () => unsub();
+          }, [user, reqLoaded]);
+
+          const handleLogout = () => {
+              if (!window.confirm('Se déconnecter du CRM sur cet appareil ?')) return;
+              if (window.fbSignOut && window.fbAuth) window.fbSignOut(window.fbAuth);
+          };
 
           const isDataLoaded = logoLoaded && catLoaded && cliLoaded && quoLoaded && ordLoaded && reqLoaded && compLoaded;
           const [currentPayload, setCurrentPayload] = useState(null);
@@ -585,15 +668,25 @@
                       <div className="w-full max-w-4xl">
                           <ProspectFormView 
                               logoUrl={logoUrl} 
-                              onSimulateSubmit={(data) => { 
-                                  const newReq = { id: Date.now(), date: new Date().toLocaleDateString('fr-FR'), ...data };
-                                  saveRequests([newReq, ...requests]);
-                              }} 
+                              onSimulateSubmit={(data) => submitPublicRequest(data, 'formulaire')}
                               isPublic={true}
                           />
                       </div>
                   </div>
               );
+          }
+
+          // === ACCÈS ADMINISTRATION : connexion obligatoire ===
+          if (!authChecked) {
+              return (
+                  <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4">
+                      <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-slate-500 font-bold animate-pulse">Connexion sécurisée...</p>
+                  </div>
+              );
+          }
+          if (!user) {
+              return <LoginView />;
           }
 
           // === VUE ADMINISTRATION (POUR VOUS) ===
@@ -626,6 +719,7 @@
                     <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Administration</p>
                     <NavItem icon="ph-database" label="Catalogue Base" active={currentView === 'catalog'} onClick={() => navigateTo('catalog')} />
                     <NavItem icon="ph-gear" label="Paramètres" active={currentView === 'settings'} onClick={() => navigateTo('settings')} />
+                    <NavItem icon="ph-sign-out" label="Se déconnecter" active={false} onClick={handleLogout} />
                   </div>
                 </nav>
               </aside>
@@ -658,6 +752,7 @@
                       <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Administration</p>
                       <NavItem icon="ph-database" label="Catalogue Base" active={currentView === 'catalog'} onClick={() => navigateTo('catalog')} />
                       <NavItem icon="ph-gear" label="Paramètres" active={currentView === 'settings'} onClick={() => navigateTo('settings')} />
+                      <NavItem icon="ph-sign-out" label="Se déconnecter" active={false} onClick={handleLogout} />
                     </div>
                   </nav>
                 </div>
@@ -699,6 +794,98 @@
         // ==========================================
         // 4. COMPOSANTS D'INTERFACE GENERIQUES
         // ==========================================
+        // Écran de connexion de l'administration (compte créé dans la console Firebase → Authentication).
+        function LoginView() {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [showPwd, setShowPwd] = useState(false);
+            const [busy, setBusy] = useState(false);
+            const [error, setError] = useState('');
+            const [info, setInfo] = useState('');
+
+            const authMessage = (code) => {
+                switch (code) {
+                    case 'auth/invalid-credential':
+                    case 'auth/wrong-password':
+                    case 'auth/user-not-found':
+                    case 'auth/invalid-email':
+                        return 'E-mail ou mot de passe incorrect.';
+                    case 'auth/too-many-requests':
+                        return 'Trop de tentatives. Patientez quelques minutes ou réinitialisez le mot de passe.';
+                    case 'auth/network-request-failed':
+                        return 'Pas de connexion Internet. Vérifiez le réseau et réessayez.';
+                    case 'auth/operation-not-allowed':
+                        return "La connexion par e-mail n'est pas activée dans Firebase (Authentication → Sign-in method → Email/Password).";
+                    case 'auth/user-disabled':
+                        return 'Ce compte est désactivé.';
+                    default:
+                        return 'Connexion impossible (' + (code || 'erreur inconnue') + ').';
+                }
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setError(''); setInfo('');
+                if (!window.fbAuth || !window.fbSignInWithEmail) { setError('Firebase ne répond pas. Rechargez la page.'); return; }
+                setBusy(true);
+                try {
+                    await window.fbSignInWithEmail(window.fbAuth, email.trim(), password);
+                } catch (err) {
+                    setError(authMessage(err && err.code));
+                } finally {
+                    setBusy(false);
+                }
+            };
+
+            const handleReset = async () => {
+                setError(''); setInfo('');
+                if (!email.trim()) { setError("Saisissez d'abord votre e-mail, puis cliquez sur « Mot de passe oublié ? »."); return; }
+                try {
+                    await window.fbSendPasswordReset(window.fbAuth, email.trim());
+                    setInfo('Si ce compte existe, un e-mail de réinitialisation vient de vous être envoyé.');
+                } catch (err) {
+                    setError(authMessage(err && err.code));
+                }
+            };
+
+            return (
+                <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 px-4 py-10 overflow-y-auto">
+                    <form onSubmit={handleLogin} className="w-full max-w-sm">
+                        <div className="flex flex-col items-center mb-8">
+                            <img src={window.BRAND_LOGO_DARK} alt="DI’ALLO Conciergerie" className="w-64 max-w-full h-auto object-contain" />
+                            <div className="mt-5 h-px w-10 bg-amber-500"></div>
+                            <p className="mt-4 text-slate-400 text-sm font-bold uppercase tracking-wider">Espace administration</p>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-300 mb-1" htmlFor="login-email">E-mail</label>
+                                <input id="login-email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full p-3 bg-slate-800 border border-slate-700 focus:border-amber-500 text-white outline-none rounded-xl" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-300 mb-1" htmlFor="login-password">Mot de passe</label>
+                                <div className="relative">
+                                    <input id="login-password" type={showPwd ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full p-3 pr-12 bg-slate-800 border border-slate-700 focus:border-amber-500 text-white outline-none rounded-xl" />
+                                    <button type="button" onClick={() => setShowPwd(!showPwd)} aria-label={showPwd ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xl">
+                                        <i className={showPwd ? 'ph ph-eye-slash' : 'ph ph-eye'}></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {error && <p className="text-sm font-bold text-red-400">{error}</p>}
+                            {info && <p className="text-sm font-bold text-emerald-400">{info}</p>}
+                            <button type="submit" disabled={busy} className="w-full bg-amber-500 text-slate-900 font-black py-3 rounded-xl hover:bg-amber-600 transition disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2">
+                                <i className={busy ? 'ph ph-spinner animate-spin' : 'ph ph-sign-in'}></i> {busy ? 'Connexion…' : 'Se connecter'}
+                            </button>
+                            <button type="button" onClick={handleReset} className="w-full text-sm text-slate-400 hover:text-amber-400 font-bold">Mot de passe oublié ?</button>
+                        </div>
+                        <p className="mt-6 text-center text-xs text-slate-500">Vous êtes client ? <a href="#formulaire" className="text-amber-400 font-bold hover:underline">Envoyer une demande de séjour</a></p>
+                    </form>
+                </div>
+            );
+        }
+
         function NavItem({ icon, label, active, onClick }) {
           return (
             <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left ${active ? 'bg-amber-500 text-slate-900 font-bold shadow' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>
@@ -2561,6 +2748,8 @@
                 celebration: 'Non', requests: '' 
             });
             const [submitted, setSubmitted] = useState(false);
+            const [sending, setSending] = useState(false);
+            const [sendError, setSendError] = useState('');
 
             if (isPublic && submitted) {
                 return (
@@ -2583,10 +2772,20 @@
                     <p className="text-slate-600 text-lg">Concevons ensemble votre voyage sur-mesure</p>
                 </div>
 
-                <form onSubmit={(e) => { 
-                    e.preventDefault(); 
-                    onSimulateSubmit(formData); 
-                    if(isPublic) setSubmitted(true);
+                <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (sending) return;
+                    setSendError('');
+                    setSending(true);
+                    try {
+                        await onSimulateSubmit(formData);
+                        if(isPublic) setSubmitted(true);
+                    } catch (err) {
+                        console.error(err);
+                        setSendError("L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez, ou contactez-nous sur WhatsApp au +212 640 872 736.");
+                    } finally {
+                        setSending(false);
+                    }
                 }} className="space-y-8">
                     
                     {/* SECTION 1 */}
@@ -2714,8 +2913,11 @@
                         <div><label className="block text-sm font-bold text-slate-300 mb-1">Message libre / Remarques</label><textarea placeholder="Besoins particuliers, enfants en bas âge, allergies, horaires de vol connus..." onChange={e=>setFormData({...formData, requests: e.target.value})} className="w-full p-3 bg-slate-800 border border-slate-700 focus:border-amber-500 text-white outline-none rounded-xl h-24"></textarea></div>
                     </div>
 
-                    <button type="submit" className="w-full bg-amber-500 text-slate-900 font-black py-4 rounded-xl hover:bg-amber-600 transition shadow-lg mt-8 text-xl flex justify-center items-center gap-2">
-                        <i className="ph ph-paper-plane-tilt"></i> Envoyer ma demande
+                    {sendError && (
+                        <p className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 font-bold text-sm">{sendError}</p>
+                    )}
+                    <button type="submit" disabled={sending} className="w-full bg-amber-500 text-slate-900 font-black py-4 rounded-xl hover:bg-amber-600 transition shadow-lg mt-8 text-xl flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-wait">
+                        <i className={sending ? "ph ph-spinner animate-spin" : "ph ph-paper-plane-tilt"}></i> {sending ? 'Envoi en cours…' : 'Envoyer ma demande'}
                     </button>
                 </form>
               </div>
@@ -3226,7 +3428,7 @@
         // ---------- Coordonnées société, pied de page et conditions tarifaires ----------
         const DEFAULT_COMPANY = {
             name: 'DI. ALLO CONCIERGERIE',
-            phones: '+212 640 872 736 / +212 674 570 084',
+            phones: '+212 640 872 736 / +212 630 324 799',
             email: 'di.alloconciergerie@gmail.com',
             ice: '003102253000027',
             bank: 'Attijariwafa bank',
