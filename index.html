@@ -1306,7 +1306,7 @@
               let shouldConvert = false; let targetQuote = null;
               const updatedQuotes = quotes.map(quote => { if (quote.id === id) { const updated = { ...quote, status: newStatus }; if (newStatus === 'Validé' && quote.status !== 'Validé') { shouldConvert = true; targetQuote = updated; } return updated; } return quote; });
               saveQuotes(updatedQuotes);
-              if (shouldConvert && targetQuote) { if (!orders.some(o => o.quoteRef === id)) { const newOrder = { ...targetQuote, id: `CMD-${Date.now()}`, quoteRef: targetQuote.id, orderStatus: 'En attente', date: new Date().toISOString().split('T')[0] }; setTimeout(() => alert("Devis validé ! Transformé en commande."), 100); saveOrders([newOrder, ...orders]); } }
+              if (shouldConvert && targetQuote) { if (!orders.some(o => o.quoteRef === id)) { const newOrder = { ...targetQuote, id: `CMD-${Date.now()}`, quoteRef: targetQuote.id, orderStatus: 'En attente', date: new Date().toISOString().split('T')[0] }; setTimeout(() => alert("Devis validé ! Transformé en commande.\n\nDans « Commandes », le bouton « Partenaires & confirmation » vous permet d'envoyer la commande à vos partenaires puis la confirmation au client."), 100); saveOrders([newOrder, ...orders]); } }
           };
 
           const openQuote = (q) => navigateTo(q && q.stayOffer ? 'stay-offer' : 'quote-builder', { quote: q });
@@ -1371,7 +1371,8 @@
                   </div>
 
                   <NavItem icon="ph-file-text" label="Devis & Propositions" active={currentView === 'quotes' || currentView === 'quote-builder' || currentView === 'stay-offer'} onClick={() => navigateTo('quotes')} />
-                  <NavItem icon="ph-check-circle" label="Commandes" active={currentView === 'orders'} onClick={() => navigateTo('orders')} />
+                  <NavItem icon="ph-check-circle" label="Commandes" active={currentView === 'orders' || currentView === 'order-fulfillment'} onClick={() => navigateTo('orders')} />
+                  <NavItem icon="ph-handshake" label="Partenaires" active={currentView === 'partners'} onClick={() => navigateTo('partners')} />
                   <NavItem icon="ph-receipt" label="Factures" active={currentView === 'invoices' || currentView === 'invoice'} onClick={() => navigateTo('invoices')} />
                   
                   <div className="pt-4 mt-4 border-t border-slate-800">
@@ -1405,7 +1406,8 @@
                       {requests.length > 0 && <span className="absolute right-4 top-3.5 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{requests.length}</span>}
                     </div>
                     <NavItem icon="ph-file-text" label="Devis & Propositions" active={currentView === 'quotes' || currentView === 'quote-builder' || currentView === 'stay-offer'} onClick={() => navigateTo('quotes')} />
-                    <NavItem icon="ph-check-circle" label="Commandes" active={currentView === 'orders'} onClick={() => navigateTo('orders')} />
+                    <NavItem icon="ph-check-circle" label="Commandes" active={currentView === 'orders' || currentView === 'order-fulfillment'} onClick={() => navigateTo('orders')} />
+                    <NavItem icon="ph-handshake" label="Partenaires" active={currentView === 'partners'} onClick={() => navigateTo('partners')} />
                     <NavItem icon="ph-receipt" label="Factures" active={currentView === 'invoices' || currentView === 'invoice'} onClick={() => navigateTo('invoices')} />
                     <div className="pt-4 mt-4 border-t border-slate-800">
                       <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Administration</p>
@@ -1438,6 +1440,8 @@
                       onCancel={() => navigateTo('quotes')} />}
                   
                   {currentView === 'orders' && <OrdersView orders={orders} clients={clients} setOrders={saveOrders} onDeleteOrder={(id) => saveOrders(orders.filter(o => o.id !== id))} onNavigate={navigateTo} />}
+                  {currentView === 'order-fulfillment' && <OrderFulfillmentView key={navKey} orderId={currentPayload && currentPayload.orderId} orders={orders} saveOrders={saveOrders} clients={clients} catalog={catalog} saveCatalog={saveCatalog} company={company} logoUrl={logoUrl} onBack={() => navigateTo('orders')} />}
+                  {currentView === 'partners' && <PartnersView catalog={catalog} saveCatalog={saveCatalog} orders={orders} />}
                   {currentView === 'invoices' && <InvoicesListView orders={orders} clients={clients} onNavigate={navigateTo} />}
                   {currentView === 'invoice' && <InvoiceView order={currentPayload?.order} clients={clients} logoUrl={logoUrl} company={company} onCancel={() => navigateTo('invoices')} />}
                   {currentView === 'catalog' && <CatalogAdminView catalog={catalog} setCatalog={saveCatalog} />}
@@ -2748,6 +2752,18 @@
                         <td className="p-4">
                           <p className="font-bold">{o.tripName}</p>
                           <p className="text-xs text-slate-500">Devis source: {o.quoteRef}</p>
+                          {(() => {
+                              const ls = orderServiceLines(o);
+                              const fl = (o.fulfillment && o.fulfillment.lines) || {};
+                              const act = ls.filter(l => (fl[l.key] || {}).status !== 'annule');
+                              const conf = act.filter(l => (fl[l.key] || {}).status === 'confirme').length;
+                              const sent = act.filter(l => ['envoye', 'confirme'].includes((fl[l.key] || {}).status)).length;
+                              if (!act.length) return null;
+                              return <p className="text-[11px] mt-1 flex flex-wrap gap-1">
+                                  <span className={`px-1.5 py-0.5 rounded font-bold ${conf === act.length ? 'bg-emerald-100 text-emerald-700' : sent ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>Partenaires : {conf}/{act.length} confirmé(s){sent > conf ? ` · ${sent - conf} envoyé(s)` : ''}</span>
+                                  {o.fulfillment && o.fulfillment.clientConfirmation && <span className="px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-700">Client confirmé</span>}
+                              </p>;
+                          })()}
                         </td>
                         <td className="p-4 font-bold">{renderMoney(o.total || 0, o.currency || 'MAD')}</td>
                         <td className="p-4">
@@ -2774,6 +2790,7 @@
                           </select>
                         </td>
                         <td className="p-4 text-right flex justify-end gap-2">
+                          <button onClick={() => onNavigate('order-fulfillment', { orderId: o.id })} className="text-slate-900 bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg transition font-bold text-xs flex items-center gap-1" title="Commandes aux partenaires et confirmation client"><i className="ph ph-paper-plane-tilt text-lg"></i> <span className="hidden lg:inline">Partenaires & confirmation</span></button>
                           <button onClick={() => onNavigate('invoice', { order: o })} className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition" title="Générer la facture"><i className="ph ph-receipt text-xl"></i></button>
                           <button onClick={() => { if(window.confirm('Voulez-vous vraiment supprimer cette commande ?')) onDeleteOrder(o.id); }} className="text-slate-400 hover:text-red-500 transition p-2" title="Supprimer la commande"><i className="ph ph-trash text-xl"></i></button>
                         </td>
@@ -4414,7 +4431,7 @@
             });
         };
 
-        function buildServiceSummary({ accommodations = [], transports = [], cars = [], activities = [], pax = 1, travelersLabel, dateIn, dateOut, nights, cities, invoice, proposition }) {
+        function buildServiceSummary({ accommodations = [], transports = [], cars = [], activities = [], pax = 1, travelersLabel, dateIn, dateOut, nights, cities, invoice, proposition, confirmation }) {
             const has = { acc: accommodations.length > 0, tr: transports.length > 0, car: cars.length > 0, act: activities.length > 0 };
             const kinds = Object.values(has).filter(Boolean).length;
             const who = travelersLabel || `${pax} personne${pax > 1 ? 's' : ''}`;
@@ -4432,7 +4449,10 @@
             const de = /^[aeiouyhéè]/i.test(nature) ? 'd’' : 'de ';
 
             const lines = [];
-            lines.push(invoice
+            if (confirmation) invoice = true; // même présentation des périodes que la facture
+            lines.push(confirmation
+                ? `Récapitulatif ${invoiceNature} pour **${who}**.`
+                : invoice
                 ? `Facturation ${invoiceNature} pour **${who}**.`
                 : `Nous avons le plaisir de vous soumettre cette ${proposition ? 'proposition' : 'offre'} ${de}${nature} sur-mesure pour **${who}**.`);
 
@@ -5752,6 +5772,760 @@
 
                     {showPicker && <CatalogAccomPicker catalog={catalog} destination={so.destination} existingCatalogIds={so.options.map((o) => o.catalogId).filter(Boolean)} onAdd={addFromCatalog} onClose={() => setShowPicker(false)} />}
                     {showPreview && <StayOfferPreviewModal vm={vm} fileName={fileName} warnings={warnings} onClose={() => setShowPreview(false)} />}
+                </div>
+            );
+        }
+
+        // ==========================================
+        // 7. PARTENAIRES ET EXÉCUTION DES COMMANDES
+        // ==========================================
+        // Les partenaires sont enregistrés dans le document « catalog » (catalog.partners) ;
+        // le suivi d'exécution d'une commande est enregistré sur la commande (order.fulfillment).
+        // Le CRM n'envoie rien lui-même : il ouvre WhatsApp ou la messagerie avec un message prérempli.
+
+        const PARTNER_CATEGORIES = {
+            transport: 'Transport / transferts',
+            hebergement: 'Hébergement',
+            voiture: 'Location de voiture',
+            activite: 'Activités / guides',
+            autre: 'Autre',
+        };
+        const LINE_KINDS = {
+            accommodation: { label: 'Hébergement', category: 'hebergement', icon: 'ph-bed', color: 'amber' },
+            transport: { label: 'Transfert', category: 'transport', icon: 'ph-van', color: 'emerald' },
+            car: { label: 'Location de voiture', category: 'voiture', icon: 'ph-steering-wheel', color: 'purple' },
+            activity: { label: 'Activité', category: 'activite', icon: 'ph-ticket', color: 'rose' },
+        };
+        const SUPPLIER_STATUS = {
+            a_envoyer: { label: 'À envoyer', cls: 'bg-slate-100 text-slate-700' },
+            envoye: { label: 'Envoyé', cls: 'bg-blue-100 text-blue-700' },
+            confirme: { label: 'Confirmé', cls: 'bg-emerald-100 text-emerald-700' },
+            refuse: { label: 'Indisponible', cls: 'bg-red-100 text-red-700' },
+            annule: { label: 'Annulé', cls: 'bg-slate-200 text-slate-500' },
+        };
+        // Champs détaillés par type de prestation
+        const LINE_FIELD_LABELS = {
+            transport: { time: 'Heure de prise en charge', place1: 'Lieu de prise en charge', place2: 'Destination', flight: 'N° de vol' },
+            accommodation: { time: 'Heure d’arrivée prévue', place1: 'Adresse / point de rendez-vous', place2: '', flight: '' },
+            car: { time: 'Heure de remise', place1: 'Lieu de remise du véhicule', place2: 'Lieu de restitution', flight: '' },
+            activity: { time: 'Heure', place1: 'Lieu de rendez-vous', place2: '', flight: '' },
+        };
+
+        const plainText = (s) => String(s || '').replace(/\*\*/g, '');
+        // Numéro pour wa.me : chiffres uniquement, indicatif inclus (06… marocain -> 2126…).
+        const waDigits = (phone) => {
+            let d = String(phone || '').replace(/[^\d+]/g, '');
+            if (d.startsWith('+')) d = d.slice(1);
+            else if (d.startsWith('00')) d = d.slice(2);
+            else if (/^0[5-7]\d{8}$/.test(d)) d = '212' + d.slice(1);
+            return d;
+        };
+        const whatsappUrl = (phone, text) => `https://wa.me/${waDigits(phone)}?text=${encodeURIComponent(text)}`;
+        const mailtoUrl = (email, subject, body) => `mailto:${encodeURIComponent(email || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const nowLabel = () => new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        // Départ et arrivée d'un transfert : « Aéroport => Casa » ou « Transfert privé – Aéroport vers votre hébergement »
+        const parseTransferRoute = (name) => {
+            const s = String(name || '');
+            let parts = s.split(/=>|→|->/).map((x) => x.trim()).filter(Boolean);
+            if (parts.length < 2 && /\svers\s/i.test(s)) {
+                const idx = s.search(/\svers\s/i);
+                parts = [s.slice(0, idx), s.slice(idx).replace(/^\s*vers\s+/i, '')];
+            }
+            if (parts.length < 2) return { from: '', to: '' };
+            const from = parts[0].split(/\s[–-]\s/).pop().trim();
+            return { from, to: parts[parts.length - 1].trim() };
+        };
+
+        const normalizePartner = (p) => ({
+            id: p.id || 'pt' + offerUid(), name: p.name || '', categories: Array.isArray(p.categories) ? p.categories : [],
+            contactName: p.contactName || '', phone: p.phone || '', email: p.email || '',
+            preferredChannel: p.preferredChannel === 'email' ? 'email' : 'whatsapp',
+            cities: p.cities || '', catalogIds: Array.isArray(p.catalogIds) ? p.catalogIds : [], notes: p.notes || '', active: p.active !== false,
+        });
+        const getPartners = (catalog) => ((catalog && Array.isArray(catalog.partners)) ? catalog.partners : []).map(normalizePartner);
+
+        // Prestations d'une commande, avec une clé stable par ligne.
+        function orderServiceLines(order) {
+            const lines = [];
+            const nights = nightsBetween(order.dateIn, order.dateOut);
+            (order.accommodations || []).forEach((a, i) => lines.push({
+                key: `acc-${i}`, kind: 'accommodation', catalogId: a.id, city: a.city || order.quoteCity || '', supplierName: a.supplierName || '',
+                label: `${a.city ? a.city + ' – ' : ''}${a.name}`,
+                when: order.dateIn && order.dateOut ? `du ${formatShortDateFR(order.dateIn)} au ${formatShortDateFR(order.dateOut)} (${a.nights || nights} nuit${(a.nights || nights) > 1 ? 's' : ''})` : `${a.nights || 0} nuit(s)`,
+                dates: [order.dateIn || ''], note: a.customNote || '',
+            }));
+            const firstAcc = (order.accommodations || [])[0];
+            const accLabel = firstAcc ? `${firstAcc.name}${firstAcc.city ? ' (' + firstAcc.city + ')' : ''}` : '';
+            (order.transports || []).forEach((t, i) => {
+                const n = transportTripCount(t);
+                const dated = (t.dates || []).slice(0, n).filter(Boolean).map(formatShortDateFR);
+                const route = parseTransferRoute(t.name);
+                // « votre hébergement » -> nom de l'hébergement réservé dans la commande
+                const resolve = (x) => (/h[ée]bergement/i.test(x) && accLabel ? accLabel : x);
+                lines.push({
+                    key: `tr-${i}`, kind: 'transport', catalogId: t.id, city: order.quoteCity || '', label: t.name,
+                    when: `${n} trajet${n > 1 ? 's' : ''}${dated.length ? ' · ' + dated.join(', ') : ' · date à préciser'}`,
+                    dates: (t.dates || []).slice(0, n), mode: t.mode || '',
+                    from: resolve(route.from), to: resolve(route.to),
+                    fromAirport: cityKey(route.from).includes('aeroport'), toAirport: cityKey(route.to).includes('aeroport'),
+                });
+            });
+            (order.cars || []).forEach((c, i) => lines.push({
+                key: `car-${i}`, kind: 'car', catalogId: c.id, city: order.quoteCity || '', label: c.name,
+                when: `${c.days || 0} jour${(c.days || 0) > 1 ? 's' : ''}${order.dateIn && order.dateOut ? ` · du ${formatShortDateFR(order.dateIn)} au ${formatShortDateFR(order.dateOut)}` : ''}`,
+                dates: [order.dateIn || ''],
+            }));
+            (order.activities || []).forEach((a, i) => lines.push({
+                key: `act-${i}`, kind: 'activity', catalogId: a.id, city: a.city || order.quoteCity || '', label: a.name,
+                when: a.pricingMode === 'pax' ? `${a.quantity || 0} pers.` : 'Forfait groupe', dates: [],
+            }));
+            return lines;
+        }
+
+        function suggestPartner(partners, line) {
+            const active = partners.filter((p) => p.active);
+            const cat = LINE_KINDS[line.kind].category;
+            const inCity = (p) => !p.cities || p.cities.split(/[,;/]/).some((c) => sameCity(c, line.city));
+            return active.find((p) => p.catalogIds.includes(line.catalogId))
+                || (line.supplierName ? active.find((p) => cityKey(p.name) === cityKey(line.supplierName)) : null)
+                || active.find((p) => p.categories.includes(cat) && p.cities && inCity(p))
+                || active.find((p) => p.categories.includes(cat) && inCity(p))
+                || null;
+        }
+
+        const defaultFulfillment = (order) => ({
+            version: 1,
+            confirmationNo: 'CONF-' + String(order.id || '').replace(/\D/g, '').slice(-6),
+            adults: order.adults != null ? order.adults : (order.pax || 1),
+            children: order.children || 0,
+            childrenAges: Array.isArray(order.childrenAges) ? order.childrenAges : [],
+            arrivalFlight: '', arrivalTime: '', departureFlight: '', departureTime: '',
+            clientNotes: '', includeClientPhone: true,
+            lines: {}, partnerMessages: {}, clientMessage: '', clientConfirmation: null,
+        });
+        const normalizeFulfillment = (order) => {
+            const base = defaultFulfillment(order);
+            const f = order.fulfillment && typeof order.fulfillment === 'object' ? order.fulfillment : {};
+            return { ...base, ...f, lines: { ...(f.lines || {}) }, partnerMessages: { ...(f.partnerMessages || {}) } };
+        };
+        const emptyLineState = () => ({ partnerId: '', partnerSnapshot: null, status: 'a_envoyer', time: '', place1: '', place2: '', flight: '', instructions: '', partnerRef: '', purchasePrice: '', clientInfo: '', sentAt: '', sentVia: '', confirmedAt: '' });
+
+        // Valeurs proposées automatiquement (non enregistrées tant qu'elles ne sont pas modifiées)
+        const lineFallbacks = (line, ful) => {
+            if (line.kind !== 'transport') return {};
+            return {
+                place1: line.from || '', place2: line.to || '',
+                flight: line.fromAirport ? ful.arrivalFlight : (line.toAirport ? ful.departureFlight : ''),
+                time: line.fromAirport ? ful.arrivalTime : '',
+            };
+        };
+        const effectiveLine = (line, ful) => {
+            const st = { ...emptyLineState(), ...(ful.lines[line.key] || {}) };
+            const fb = lineFallbacks(line, ful);
+            return { ...st, time: st.time || fb.time || '', place1: st.place1 || fb.place1 || '', place2: st.place2 || fb.place2 || '', flight: st.flight || fb.flight || '' };
+        };
+
+        function fulfillmentTravelers(ful) { return travelersLabel(ful.adults, ful.children, ful.childrenAges); }
+
+        function buildPartnerMessage({ partner, lines, order, client, ful, company }) {
+            const c = normalizeCompany(company);
+            const out = [];
+            out.push(`Bonjour ${partner.contactName || partner.name},`);
+            out.push('');
+            out.push(`${c.name} vous transmet la commande suivante (réf. ${order.id}) :`);
+            lines.forEach((line) => {
+                const st = effectiveLine(line, ful);
+                const lab = LINE_FIELD_LABELS[line.kind];
+                out.push('');
+                out.push(`• ${LINE_KINDS[line.kind].label} : ${line.label}`);
+                out.push(`  ${line.kind === 'accommodation' ? 'Séjour' : 'Date'} : ${line.when}${st.time ? ` — ${lab.time.toLowerCase()} : ${st.time}` : ''}`);
+                if (st.place1 && lab.place1) out.push(`  ${lab.place1} : ${st.place1}${st.flight ? ` (vol ${st.flight})` : ''}`);
+                else if (st.flight) out.push(`  Vol : ${st.flight}`);
+                if (st.place2 && lab.place2) out.push(`  ${lab.place2} : ${st.place2}`);
+                out.push(`  ${line.kind === 'accommodation' ? 'Occupants' : 'Personnes'} : ${fulfillmentTravelers(ful)}`);
+                if (st.instructions) out.push(`  Remarques : ${st.instructions}`);
+            });
+            out.push('');
+            const clientName = client ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : '';
+            if (clientName) out.push(`Client : ${clientName}${ful.includeClientPhone && client && client.phone ? ` — ${client.phone}` : ''}`);
+            const needsDriver = lines.some((l) => l.kind === 'transport' || l.kind === 'car');
+            out.push(needsDriver
+                ? 'Merci de nous confirmer la prise en charge, avec le nom et le téléphone du chauffeur ainsi que le véhicule.'
+                : 'Merci de nous confirmer la disponibilité et la réservation.');
+            out.push('');
+            out.push('Cordialement,');
+            out.push(c.name);
+            if (c.phones) out.push(c.phones);
+            return out.join('\n');
+        }
+
+        function buildClientConfirmationMessage({ order, client, ful, company, lines }) {
+            const c = normalizeCompany(company);
+            const clientName = client ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : '';
+            const summary = buildServiceSummary({
+                accommodations: order.accommodations || [], transports: order.transports || [], cars: order.cars || [], activities: order.activities || [],
+                pax: order.pax || 1, travelersLabel: fulfillmentTravelers(ful), dateIn: order.dateIn, dateOut: order.dateOut,
+                nights: (order.accommodations || []).length ? nightsBetween(order.dateIn, order.dateOut) : 0, cities: null, confirmation: true,
+            });
+            const out = [];
+            out.push(`Bonjour ${clientName || ''},`.replace(' ,', ','));
+            out.push('');
+            out.push(`Nous avons le plaisir de vous confirmer votre réservation avec ${c.name}.`);
+            out.push(`N° de confirmation : ${ful.confirmationNo}`);
+            if (order.tripName) out.push(`Dossier : ${order.tripName}`);
+            out.push('');
+            summary.lines.slice(1).forEach((l) => out.push(plainText(l)));
+            out.push('');
+            out.push('Vos prestations :');
+            lines.forEach((line) => {
+                const st = effectiveLine(line, ful);
+                if (st.status === 'annule') return;
+                out.push(`• ${LINE_KINDS[line.kind].label} : ${line.label} — ${line.when}${st.time ? ` à ${st.time}` : ''}`);
+                if (st.place1 && LINE_FIELD_LABELS[line.kind].place1) out.push(`  ${LINE_FIELD_LABELS[line.kind].place1} : ${st.place1}`);
+                if (st.clientInfo) st.clientInfo.split('\n').filter(Boolean).forEach((x) => out.push(`  ${x}`));
+            });
+            out.push('');
+            out.push(`Montant total : ${renderMoney(order.total || 0, order.currency || 'MAD')}`);
+            if (ful.clientNotes && ful.clientNotes.trim()) {
+                out.push('');
+                out.push('Informations importantes :');
+                ful.clientNotes.split('\n').filter((x) => x.trim()).forEach((x) => out.push(`- ${x.trim()}`));
+            }
+            out.push('');
+            out.push(`Pour toute question pendant votre séjour : ${c.phones}${c.email ? ' — ' + c.email : ''}`);
+            out.push('Nous vous souhaitons un excellent séjour !');
+            out.push('');
+            out.push(c.name);
+            if (sloganText(c.slogan)) out.push(`« ${sloganText(c.slogan)} »`);
+            return out.join('\n');
+        }
+
+        // ---------- Formulaire partenaire ----------
+        function PartnerFormModal({ initial, catalog, onSave, onClose, presetCategory }) {
+            const [p, setP] = useState(() => normalizePartner(initial || { categories: presetCategory ? [presetCategory] : [] }));
+            const set = (k) => (e) => setP({ ...p, [k]: e.target.value });
+            const toggleCat = (c) => setP({ ...p, categories: p.categories.includes(c) ? p.categories.filter((x) => x !== c) : [...p.categories, c] });
+            const toggleItem = (id) => setP({ ...p, catalogIds: p.catalogIds.includes(id) ? p.catalogIds.filter((x) => x !== id) : [...p.catalogIds, id] });
+            const groups = [
+                ['transport', 'Transferts', (catalog.transports || []).map((t) => [t.id, `${t.name}${t.mode ? ' · ' + t.mode : ''}${t.pricingMode === 'pax' ? ' (par pers.)' : ''}`])],
+                ['hebergement', 'Hébergements', (catalog.accommodations || []).map((a) => [a.id, `${a.city} – ${a.commercialName || a.name}`])],
+                ['voiture', 'Voitures', (catalog.cars || []).map((c) => [c.id, c.name])],
+                ['activite', 'Activités', (catalog.activities || []).map((a) => [a.id, `${a.city} – ${a.name}`])],
+            ].filter(([cat]) => p.categories.includes(cat));
+            const submit = () => {
+                if (!p.name.trim()) { alert('Indiquez le nom du partenaire.'); return; }
+                if (!p.phone.trim() && !p.email.trim()) { alert('Indiquez au moins un téléphone WhatsApp ou un e-mail.'); return; }
+                onSave({ ...p, name: p.name.trim() });
+            };
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 z-[70] flex items-center justify-center p-4 no-print">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                            <h3 className="font-bold text-lg"><i className="ph ph-handshake text-amber-500"></i> {initial && initial.id ? 'Modifier le partenaire' : 'Nouveau partenaire'}</h3>
+                            <button onClick={onClose}><i className="ph ph-x text-xl"></i></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <OfField label="Nom du partenaire *" className="md:col-span-2"><input value={p.name} onChange={set('name')} placeholder="Ex. Casa Transfert VIP" className={ofInput + ' font-bold'} /></OfField>
+                                <OfField label="Personne à contacter"><input value={p.contactName} onChange={set('contactName')} placeholder="Ex. Youssef" className={ofInput} /></OfField>
+                                <OfField label="Villes / zones couvertes" hint="Séparées par des virgules"><input value={p.cities} onChange={set('cities')} placeholder="Ex. Casablanca, Rabat" className={ofInput} /></OfField>
+                                <OfField label="Téléphone WhatsApp" hint="Avec l’indicatif, ex. +212 6…"><input value={p.phone} onChange={set('phone')} placeholder="+212 6 00 00 00 00" className={ofInput} /></OfField>
+                                <OfField label="E-mail"><input type="email" value={p.email} onChange={set('email')} placeholder="contact@partenaire.ma" className={ofInput} /></OfField>
+                                <OfField label="Canal préféré">
+                                    <select value={p.preferredChannel} onChange={set('preferredChannel')} className={ofInput}>
+                                        <option value="whatsapp">WhatsApp</option><option value="email">E-mail</option>
+                                    </select>
+                                </OfField>
+                                <label className="flex items-center gap-2 text-sm font-bold self-end pb-2"><input type="checkbox" checked={p.active} onChange={(e) => setP({ ...p, active: e.target.checked })} className="accent-amber-500 w-4 h-4" /> Partenaire actif</label>
+                            </div>
+                            <div>
+                                <p className="text-[11px] font-bold text-slate-500 uppercase mb-2">Catégories de prestations</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {Object.entries(PARTNER_CATEGORIES).map(([k, l]) => (
+                                        <button type="button" key={k} onClick={() => toggleCat(k)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${p.categories.includes(k) ? 'bg-amber-500 border-amber-500 text-slate-900' : 'bg-white border-slate-300 text-slate-600'}`}>{l}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            {groups.length > 0 && (
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Prestations du catalogue assurées par ce partenaire</p>
+                                    <p className="text-[11px] text-slate-400 mb-2">Le partenaire sera proposé automatiquement pour ces prestations dans les commandes.</p>
+                                    <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
+                                        {groups.map(([cat, title, items]) => (
+                                            <div key={cat}>
+                                                <p className="text-xs font-black text-slate-600 mb-1">{title}</p>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                                                    {items.map(([id, label]) => (
+                                                        <label key={id} className="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={p.catalogIds.includes(id)} onChange={() => toggleItem(id)} className="accent-amber-500" /> {label}</label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <OfField label="Notes internes"><textarea rows={2} value={p.notes} onChange={set('notes')} placeholder="Tarifs négociés, véhicules disponibles, délais…" className={ofInput} /></OfField>
+                        </div>
+                        <div className="p-4 border-t bg-slate-50 flex justify-end gap-2 shrink-0">
+                            <button onClick={onClose} className="px-4 py-2 rounded-lg bg-white border font-medium text-sm">Annuler</button>
+                            <button onClick={submit} className="px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 font-bold text-sm">Enregistrer</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ---------- Écran Partenaires ----------
+        function PartnersView({ catalog, saveCatalog, orders }) {
+            const partners = getPartners(catalog);
+            const [editing, setEditing] = useState(null);
+            const [search, setSearch] = useState('');
+            const [cat, setCat] = useState('');
+            const savePartners = (list) => saveCatalog({ ...catalog, partners: list });
+            const usage = (id) => orders.filter((o) => o.fulfillment && Object.values(o.fulfillment.lines || {}).some((l) => l.partnerId === id)).length;
+            const list = partners
+                .filter((p) => !cat || p.categories.includes(cat))
+                .filter((p) => !search || cityKey([p.name, p.contactName, p.cities, p.phone, p.email].join(' ')).includes(cityKey(search)))
+                .sort((a, b) => (b.active - a.active) || a.name.localeCompare(b.name));
+            return (
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="flex flex-col md:flex-row justify-between md:items-end gap-3 border-b border-slate-200 pb-4">
+                        <div>
+                            <h2 className="text-3xl font-black text-slate-800 tracking-tight">Partenaires</h2>
+                            <p className="text-slate-500 mt-1">Vos prestataires : transport, hébergement, voitures, activités. Ils reçoivent les commandes par WhatsApp ou e-mail.</p>
+                        </div>
+                        <button onClick={() => setEditing({})} className="bg-amber-500 text-slate-900 px-4 py-2 rounded-lg font-bold hover:bg-amber-600 flex items-center gap-2 shadow-lg"><i className="ph ph-plus-circle text-lg"></i> Ajouter un partenaire</button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un partenaire…" className={ofInput + ' max-w-xs bg-white'} />
+                        <select value={cat} onChange={(e) => setCat(e.target.value)} className={ofInput + ' max-w-xs bg-white'}>
+                            <option value="">Toutes les catégories</option>
+                            {Object.entries(PARTNER_CATEGORIES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                        </select>
+                    </div>
+                    {partners.length === 0 && (
+                        <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center text-slate-500">
+                            <i className="ph ph-handshake text-5xl text-amber-500"></i>
+                            <p className="font-bold mt-2">Aucun partenaire pour l’instant.</p>
+                            <p className="text-sm">Ajoutez par exemple votre partenaire de transferts aéroport : il sera proposé automatiquement dans vos commandes.</p>
+                        </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {list.map((p) => (
+                            <div key={p.id} className={`bg-white rounded-2xl border shadow-sm p-5 flex flex-col ${p.active ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}>
+                                <div className="flex justify-between items-start gap-2">
+                                    <div className="min-w-0">
+                                        <p className="font-black text-lg text-slate-800 truncate">{p.name}</p>
+                                        {p.contactName && <p className="text-sm text-slate-500">Contact : {p.contactName}</p>}
+                                    </div>
+                                    {!p.active && <span className="text-[10px] font-bold uppercase bg-slate-200 text-slate-600 px-2 py-0.5 rounded">Inactif</span>}
+                                </div>
+                                <div className="flex flex-wrap gap-1 mt-2">{p.categories.map((c) => <span key={c} className="text-[10px] font-bold uppercase bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">{PARTNER_CATEGORIES[c] || c}</span>)}</div>
+                                <div className="text-sm text-slate-600 mt-3 space-y-1 flex-1">
+                                    {p.phone && <p><i className="ph ph-whatsapp-logo text-emerald-600"></i> {p.phone}{p.preferredChannel === 'whatsapp' && <span className="text-[10px] text-emerald-600 font-bold ml-1">préféré</span>}</p>}
+                                    {p.email && <p className="truncate"><i className="ph ph-envelope-simple text-blue-600"></i> {p.email}{p.preferredChannel === 'email' && <span className="text-[10px] text-blue-600 font-bold ml-1">préféré</span>}</p>}
+                                    {p.cities && <p><i className="ph ph-map-pin text-slate-400"></i> {p.cities}</p>}
+                                    <p className="text-xs text-slate-400">{p.catalogIds.length} prestation(s) du catalogue · {usage(p.id)} commande(s)</p>
+                                </div>
+                                <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
+                                    <button onClick={() => setEditing(p)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-sm"><i className="ph ph-pencil-simple"></i> Modifier</button>
+                                    <button onClick={() => {
+                                        const n = usage(p.id);
+                                        if (!window.confirm(n ? `Ce partenaire est utilisé dans ${n} commande(s). Ses coordonnées y resteront visibles. Supprimer quand même ?` : `Supprimer ${p.name} ?`)) return;
+                                        savePartners(partners.filter((x) => x.id !== p.id));
+                                    }} className="px-3 text-slate-400 hover:text-red-600" title="Supprimer"><i className="ph ph-trash text-lg"></i></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {editing && <PartnerFormModal initial={editing} catalog={catalog} onClose={() => setEditing(null)}
+                        onSave={(p) => { savePartners(partners.some((x) => x.id === p.id) ? partners.map((x) => (x.id === p.id ? p : x)) : [...partners, p]); setEditing(null); }} />}
+                </div>
+            );
+        }
+
+        // ---------- Exécution d'une commande : partenaires + confirmation client ----------
+        function OrderFulfillmentView({ orderId, orders, saveOrders, clients, catalog, saveCatalog, company, logoUrl, onBack }) {
+            const order = orders.find((o) => o.id === orderId);
+            const [ful, setFul] = useState(() => (order ? normalizeFulfillment(order) : null));
+            const [dirty, setDirty] = useState(false);
+            const [tab, setTab] = useState('partners');
+            const [openKey, setOpenKey] = useState(null);
+            const [newPartnerFor, setNewPartnerFor] = useState(null);
+            const [toast, setToast] = useState('');
+
+            useEffect(() => {
+                const handler = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
+                window.addEventListener('beforeunload', handler);
+                return () => window.removeEventListener('beforeunload', handler);
+            }, [dirty]);
+
+            if (!order || !ful) return <div className="p-8 text-center text-slate-500">Commande introuvable. <button onClick={onBack} className="underline font-bold">Retour</button></div>;
+
+            const client = clients.find((c) => c.id == order.clientId);
+            const partners = getPartners(catalog);
+            const lines = orderServiceLines(order);
+            const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 3000); };
+
+            const persist = (next, msg) => {
+                saveOrders(orders.map((o) => (o.id === order.id ? { ...o, fulfillment: next } : o)));
+                setFul(next); setDirty(false);
+                if (msg) flash(msg);
+            };
+            const update = (patch) => { setFul((f) => ({ ...f, ...patch })); setDirty(true); };
+            const lineState = (key) => ({ ...emptyLineState(), ...(ful.lines[key] || {}) });
+            const updateLine = (key, patch) => { setFul((f) => ({ ...f, lines: { ...f.lines, [key]: { ...emptyLineState(), ...(f.lines[key] || {}), ...patch } } })); setDirty(true); };
+            const partnerById = (id) => partners.find((p) => p.id === id) || null;
+
+            // Partenaire effectif d'une ligne : choisi, sinon suggestion (affichée comme telle)
+            const assignment = (line) => {
+                const st = lineState(line.key);
+                if (st.partnerId === 'none') return { partner: null, suggested: false };
+                if (st.partnerId) return { partner: partnerById(st.partnerId) || (st.partnerSnapshot ? { ...normalizePartner(st.partnerSnapshot), id: st.partnerId, deleted: true } : null), suggested: false };
+                const s = suggestPartner(partners, line);
+                return { partner: s, suggested: !!s };
+            };
+            const snapshotOf = (p) => (p ? { name: p.name, contactName: p.contactName, phone: p.phone, email: p.email } : null);
+            const assign = (key, partnerId) => updateLine(key, { partnerId, partnerSnapshot: snapshotOf(partnerById(partnerId)) });
+
+            // Regroupement des lignes par partenaire (pour un message par partenaire)
+            const groups = [];
+            lines.forEach((line) => {
+                const { partner } = assignment(line);
+                const st = lineState(line.key);
+                if (!partner || st.status === 'annule') return;
+                let g = groups.find((x) => x.partner.id === partner.id);
+                if (!g) { g = { partner, lines: [] }; groups.push(g); }
+                g.lines.push(line);
+            });
+            const unassigned = lines.filter((l) => !assignment(l).partner && lineState(l.key).status !== 'annule');
+            const counts = lines.reduce((acc, l) => { const s = lineState(l.key).status; acc[s] = (acc[s] || 0) + 1; return acc; }, {});
+            const activeLines = lines.filter((l) => lineState(l.key).status !== 'annule');
+            const confirmedCount = activeLines.filter((l) => lineState(l.key).status === 'confirme').length;
+
+            const messageFor = (g) => (ful.partnerMessages[g.partner.id] != null ? ful.partnerMessages[g.partner.id] : buildPartnerMessage({ partner: g.partner, lines: g.lines, order, client, ful, company }));
+            const subjectFor = (g) => `Commande ${normalizeCompany(company).name} – ${order.id}${order.dateIn ? ' – ' + formatShortDateFR(order.dateIn) : ''}`;
+
+            // Fixe les partenaires suggérés et marque les lignes comme envoyées
+            const markSent = (g, via) => {
+                const next = { ...ful, lines: { ...ful.lines } };
+                g.lines.forEach((l) => {
+                    const st = { ...emptyLineState(), ...(next.lines[l.key] || {}) };
+                    next.lines[l.key] = { ...st, partnerId: g.partner.id, partnerSnapshot: snapshotOf(g.partner), status: st.status === 'confirme' ? 'confirme' : 'envoye', sentAt: nowLabel(), sentVia: via };
+                });
+                persist(next, via === 'copie' ? 'Message copié. Lignes marquées « Envoyé ».' : `${via === 'whatsapp' ? 'WhatsApp' : 'La messagerie'} s’ouvre avec le message : appuyez sur Envoyer. Lignes marquées « Envoyé ».`);
+            };
+            const sendPartner = (g, via) => {
+                const text = messageFor(g);
+                if (via === 'whatsapp') {
+                    if (!g.partner.phone) { alert('Ce partenaire n’a pas de numéro WhatsApp.'); return; }
+                    window.open(whatsappUrl(g.partner.phone, text), '_blank');
+                } else if (via === 'email') {
+                    if (!g.partner.email) { alert('Ce partenaire n’a pas d’e-mail.'); return; }
+                    window.location.href = mailtoUrl(g.partner.email, subjectFor(g), text);
+                } else {
+                    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).catch(() => alert('Copie impossible : sélectionnez le texte et copiez-le.'));
+                }
+                markSent(g, via);
+            };
+            const confirmGroup = (g) => {
+                const next = { ...ful, lines: { ...ful.lines } };
+                g.lines.forEach((l) => { const st = { ...emptyLineState(), ...(next.lines[l.key] || {}) }; next.lines[l.key] = { ...st, partnerId: g.partner.id, partnerSnapshot: snapshotOf(g.partner), status: 'confirme', confirmedAt: nowLabel() }; });
+                persist(next, `${g.partner.name} : prestations confirmées.`);
+            };
+
+            // ----- Confirmation client -----
+            const clientMessage = ful.clientMessage || buildClientConfirmationMessage({ order, client, ful, company, lines });
+            const sendClient = (via) => {
+                const text = clientMessage;
+                if (via === 'whatsapp') {
+                    if (!client || !client.phone) { alert('Le client n’a pas de numéro de téléphone dans sa fiche.'); return; }
+                    window.open(whatsappUrl(client.phone, text), '_blank');
+                } else if (via === 'email') {
+                    if (!client || !client.email) { alert('Le client n’a pas d’e-mail dans sa fiche.'); return; }
+                    window.location.href = mailtoUrl(client.email, `Confirmation de votre réservation – ${ful.confirmationNo}`, text);
+                } else {
+                    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).catch(() => alert('Copie impossible : sélectionnez le texte et copiez-le.'));
+                }
+                const next = { ...ful, clientConfirmation: { sentAt: nowLabel(), via } };
+                saveOrders(orders.map((o) => (o.id === order.id ? { ...o, fulfillment: next, orderStatus: o.orderStatus === 'En attente' ? 'Confirmé' : o.orderStatus } : o)));
+                setFul(next); setDirty(false);
+                flash(via === 'copie' ? 'Confirmation copiée et notée comme envoyée.' : 'Message ouvert : appuyez sur Envoyer. Confirmation notée comme envoyée.');
+            };
+            const printConfirmation = () => {
+                if (dirty) persist(ful);
+                const prev = document.title;
+                document.title = `Confirmation_${ful.confirmationNo}`;
+                setTimeout(() => { window.print(); document.title = prev; }, 100);
+            };
+
+            const kindBadge = (kind) => {
+                const k = LINE_KINDS[kind];
+                const colors = { amber: 'bg-amber-100 text-amber-800', emerald: 'bg-emerald-100 text-emerald-700', purple: 'bg-purple-100 text-purple-700', rose: 'bg-rose-100 text-rose-700' };
+                return <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${colors[k.color]}`}><i className={`ph ${k.icon}`}></i> {k.label}</span>;
+            };
+
+            const clientName = client ? `${client.firstName || ''} ${client.lastName || ''}`.trim() : 'Client inconnu';
+            const summary = buildServiceSummary({
+                accommodations: order.accommodations || [], transports: order.transports || [], cars: order.cars || [], activities: order.activities || [],
+                pax: order.pax || 1, travelersLabel: fulfillmentTravelers(ful), dateIn: order.dateIn, dateOut: order.dateOut,
+                nights: (order.accommodations || []).length ? nightsBetween(order.dateIn, order.dateOut) : 0,
+                cities: order.quoteCity || null, confirmation: true,
+            });
+
+            return (
+                <div className="max-w-7xl mx-auto pb-24">
+                    <div className="bg-slate-900 rounded-2xl p-4 md:p-5 text-white flex flex-col lg:flex-row justify-between lg:items-center gap-3 shadow-xl mb-6 no-print sticky top-4 z-40">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-slate-900 text-2xl shrink-0"><i className="ph ph-paper-plane-tilt"></i></div>
+                            <div className="min-w-0">
+                                <h2 className="text-xl font-black truncate">{order.tripName || 'Commande'} <span className="text-xs font-bold text-slate-400 ml-1">{order.id}</span></h2>
+                                <p className="text-slate-400 text-xs">{clientName} · {confirmedCount}/{activeLines.length} prestation(s) confirmée(s) par les partenaires{ful.clientConfirmation ? ` · confirmation client envoyée le ${ful.clientConfirmation.sentAt}` : ''}</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={() => { if (!dirty || window.confirm('Quitter sans enregistrer les modifications ?')) onBack(); }} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm">Retour</button>
+                            <button onClick={() => persist(ful, 'Enregistré.')} className={`px-4 py-2 font-bold rounded-lg text-sm flex items-center gap-1 ${dirty ? 'bg-amber-500 hover:bg-amber-600 text-slate-900' : 'bg-slate-700 text-slate-300'}`}><i className="ph ph-floppy-disk"></i> {dirty ? 'Enregistrer' : 'Enregistré'}</button>
+                        </div>
+                    </div>
+
+                    {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-lg z-[80] text-sm font-bold no-print max-w-[90vw]"><i className="ph ph-check-circle"></i> {toast}</div>}
+
+                    <div className="flex gap-2 mb-6 no-print">
+                        <button onClick={() => setTab('partners')} className={`px-4 py-2 rounded-xl font-bold text-sm ${tab === 'partners' ? 'bg-amber-500 text-slate-900' : 'bg-white border border-slate-200 text-slate-600'}`}>1. Commandes aux partenaires</button>
+                        <button onClick={() => setTab('client')} className={`px-4 py-2 rounded-xl font-bold text-sm ${tab === 'client' ? 'bg-amber-500 text-slate-900' : 'bg-white border border-slate-200 text-slate-600'}`}>2. Confirmation client</button>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 no-print">
+                        {/* Colonne gauche : client + prestations */}
+                        <div className="xl:col-span-3 space-y-6">
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                                <h3 className="font-bold text-lg flex items-center gap-2 border-b border-slate-100 pb-2"><i className="ph ph-user-circle text-blue-500"></i> Client et voyage</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                                    <p><span className="text-slate-400">Client :</span> <strong>{clientName}</strong></p>
+                                    <p><span className="text-slate-400">Téléphone :</span> {client && client.phone ? client.phone : <em className="text-red-500">manquant</em>}</p>
+                                    <p className="truncate"><span className="text-slate-400">E-mail :</span> {client && client.email ? client.email : <em className="text-slate-400">—</em>}</p>
+                                    <p className="md:col-span-3"><span className="text-slate-400">Dates :</span> {order.dateIn && order.dateOut ? `du ${formatShortDateFR(order.dateIn)} au ${formatShortDateFR(order.dateOut)}` : 'non renseignées'} · <span className="text-slate-400">Lieu :</span> {order.quoteCity || '—'}</p>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+                                    <OfField label="Adultes"><input type="number" min="0" value={ful.adults} onChange={(e) => update({ adults: toCount(e.target.value, 0) })} className={ofInput + ' text-center'} /></OfField>
+                                    <OfField label="Enfants"><input type="number" min="0" value={ful.children} onChange={(e) => { const n = toCount(e.target.value, 0); update({ children: n, childrenAges: Array.from({ length: n }, (_, i) => ful.childrenAges[i] || '') }); }} className={ofInput + ' text-center'} /></OfField>
+                                    {Array.from({ length: ful.children }, (_, i) => (
+                                        <OfField key={i} label={`Âge enfant ${i + 1}`}><input type="number" min="0" max="17" value={ful.childrenAges[i] || ''} onChange={(e) => update({ childrenAges: Array.from({ length: ful.children }, (_, k) => (k === i ? e.target.value : (ful.childrenAges[k] || ''))) })} className={ofInput + ' text-center'} /></OfField>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <OfField label="Vol d’arrivée"><input value={ful.arrivalFlight} onChange={(e) => update({ arrivalFlight: e.target.value })} placeholder="Ex. AT 512" className={ofInput} /></OfField>
+                                    <OfField label="Heure d’arrivée"><input type="time" value={ful.arrivalTime} onChange={(e) => update({ arrivalTime: e.target.value })} className={ofInput} /></OfField>
+                                    <OfField label="Vol de départ"><input value={ful.departureFlight} onChange={(e) => update({ departureFlight: e.target.value })} placeholder="Ex. AT 513" className={ofInput} /></OfField>
+                                    <OfField label="Heure du vol retour"><input type="time" value={ful.departureTime} onChange={(e) => update({ departureTime: e.target.value })} className={ofInput} /></OfField>
+                                </div>
+                                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ful.includeClientPhone} onChange={(e) => update({ includeClientPhone: e.target.checked })} className="accent-amber-500" /> Transmettre le téléphone du client aux partenaires</label>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-amber-200 space-y-3">
+                                <h3 className="font-bold text-lg flex items-center gap-2 border-b border-slate-100 pb-2 text-amber-700"><i className="ph ph-list-checks"></i> Prestations de la commande ({lines.length})</h3>
+                                {lines.length === 0 && <p className="text-sm text-slate-400">Cette commande ne contient aucune prestation.</p>}
+                                {lines.map((line) => {
+                                    const st = lineState(line.key);
+                                    const eff = effectiveLine(line, ful);
+                                    const fb = lineFallbacks(line, ful);
+                                    const { partner, suggested } = assignment(line);
+                                    const lab = LINE_FIELD_LABELS[line.kind];
+                                    const open = openKey === line.key;
+                                    const cat = LINE_KINDS[line.kind].category;
+                                    const options = partners.filter((p) => p.active || p.id === st.partnerId).sort((a, b) => (b.categories.includes(cat) - a.categories.includes(cat)) || a.name.localeCompare(b.name));
+                                    return (
+                                        <div key={line.key} className={`rounded-xl border ${open ? 'border-amber-300 shadow-md' : 'border-slate-200'} overflow-hidden`}>
+                                            <div className="p-3 bg-slate-50 flex flex-col md:flex-row md:items-center gap-3">
+                                                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setOpenKey(open ? null : line.key)}>
+                                                    <div className="flex items-center gap-2 flex-wrap">{kindBadge(line.kind)} <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${SUPPLIER_STATUS[st.status].cls}`}>{SUPPLIER_STATUS[st.status].label}</span></div>
+                                                    <p className="font-bold text-sm mt-1 truncate">{line.label}</p>
+                                                    <p className="text-xs text-slate-500">{line.when}{eff.time ? ` · ${eff.time}` : ''}{st.sentAt ? ` · envoyé le ${st.sentAt} (${st.sentVia})` : ''}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <select value={st.partnerId || (partner ? partner.id : '')} onChange={(e) => { if (e.target.value === '__new') { setNewPartnerFor(line); return; } assign(line.key, e.target.value); }} className={`p-2 border rounded-lg text-sm max-w-[220px] ${partner ? 'bg-white border-slate-200' : 'bg-red-50 border-red-200'}`}>
+                                                        <option value="">{suggested ? 'Aucun partenaire' : 'Choisir un partenaire…'}</option>
+                                                        {options.map((p) => <option key={p.id} value={p.id}>{p.name}{suggested && partner && partner.id === p.id ? ' (suggéré)' : ''}</option>)}
+                                                        {partner && partner.deleted && <option value={partner.id}>{partner.name} (supprimé)</option>}
+                                                        <option value="none">— Pas de partenaire (géré par DI’ALLO)</option>
+                                                        <option value="__new">+ Nouveau partenaire…</option>
+                                                    </select>
+                                                    <select value={st.status} onChange={(e) => updateLine(line.key, { status: e.target.value, ...(e.target.value === 'confirme' ? { confirmedAt: nowLabel() } : {}) })} className="p-2 border border-slate-200 rounded-lg text-sm bg-white">
+                                                        {Object.entries(SUPPLIER_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                                    </select>
+                                                    <button onClick={() => setOpenKey(open ? null : line.key)} className="p-2 text-slate-500" title="Détails"><i className={`ph ${open ? 'ph-caret-up' : 'ph-caret-down'}`}></i></button>
+                                                </div>
+                                            </div>
+                                            {suggested && !st.partnerId && <p className="px-3 py-1 text-[11px] text-amber-800 bg-amber-50 border-t border-amber-100">Partenaire suggéré automatiquement : il sera retenu à l’envoi du message.</p>}
+                                            {open && (
+                                                <div className="p-4 space-y-3">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        <OfField label={lab.time}><input type="time" value={st.time} onChange={(e) => updateLine(line.key, { time: e.target.value })} placeholder={fb.time || ''} className={ofInput} />{!st.time && fb.time && <p className="text-[10px] text-slate-400 mt-0.5">Repris de l’heure d’arrivée : {fb.time}</p>}</OfField>
+                                                        {lab.flight && <OfField label={lab.flight}><input value={st.flight} onChange={(e) => updateLine(line.key, { flight: e.target.value })} placeholder={fb.flight || 'Ex. AT 512'} className={ofInput} /></OfField>}
+                                                        {lab.place1 && <OfField label={lab.place1}><input value={st.place1} onChange={(e) => updateLine(line.key, { place1: e.target.value })} placeholder={fb.place1 || ''} className={ofInput} /></OfField>}
+                                                        {lab.place2 && <OfField label={lab.place2}><input value={st.place2} onChange={(e) => updateLine(line.key, { place2: e.target.value })} placeholder={fb.place2 || ''} className={ofInput} /></OfField>}
+                                                    </div>
+                                                    <OfField label="Consignes pour le partenaire"><textarea rows={2} value={st.instructions} onChange={(e) => updateLine(line.key, { instructions: e.target.value })} placeholder="Ex. Siège enfant, pancarte au nom du client, 3 valises…" className={ofInput} /></OfField>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-purple-50/60 border border-purple-100 rounded-xl p-3">
+                                                        <OfField label="Réf. / confirmation du partenaire" hint="Interne"><input value={st.partnerRef} onChange={(e) => updateLine(line.key, { partnerRef: e.target.value })} className={ofInput + ' bg-white'} /></OfField>
+                                                        <OfField label="Coût partenaire (MAD)" hint="Interne, jamais transmis au client"><input type="number" min="0" value={st.purchasePrice} onChange={(e) => updateLine(line.key, { purchasePrice: e.target.value })} className={ofInput + ' bg-white'} /></OfField>
+                                                    </div>
+                                                    <OfField label="Informations à communiquer au client" hint="Reprises dans la confirmation client. Ex. chauffeur, téléphone, véhicule, heure d’arrivée à l’hébergement.">
+                                                        <textarea rows={2} value={st.clientInfo} onChange={(e) => updateLine(line.key, { clientInfo: e.target.value })} placeholder={line.kind === 'transport' ? 'Ex. Chauffeur : Youssef – +212 6 …, Dacia Lodgy grise. Rendez-vous sortie hall 2.' : 'Ex. Check-in à partir de 15 h, code de la boîte à clés envoyé la veille.'} className={ofInput} />
+                                                    </OfField>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Colonne droite : messages */}
+                        <div className="xl:col-span-2 space-y-6">
+                            {tab === 'partners' && (
+                                <div className="space-y-4">
+                                    <div className="bg-slate-900 text-white p-4 rounded-2xl">
+                                        <p className="font-black flex items-center gap-2"><i className="ph ph-paper-plane-tilt text-amber-500"></i> Messages aux partenaires</p>
+                                        <p className="text-xs text-slate-400 mt-1">Un message par partenaire, avec toutes ses prestations. WhatsApp ou votre messagerie s’ouvre avec le texte prérempli : c’est vous qui appuyez sur Envoyer.</p>
+                                        <div className="flex flex-wrap gap-2 mt-3 text-[11px]">{Object.entries(SUPPLIER_STATUS).filter(([k]) => counts[k]).map(([k, v]) => <span key={k} className={`px-2 py-0.5 rounded font-bold ${v.cls}`}>{v.label} : {counts[k]}</span>)}</div>
+                                    </div>
+                                    {unassigned.length > 0 && (
+                                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
+                                            <p className="font-bold"><i className="ph ph-warning"></i> {unassigned.length} prestation(s) sans partenaire :</p>
+                                            <ul className="list-disc pl-5 text-xs mt-1">{unassigned.map((l) => <li key={l.key}>{l.label}</li>)}</ul>
+                                            {partners.length === 0 && <p className="text-xs mt-2">Ajoutez vos partenaires dans le menu « Partenaires » ou via « + Nouveau partenaire… » sur la ligne.</p>}
+                                        </div>
+                                    )}
+                                    {groups.length === 0 && unassigned.length === 0 && <p className="text-sm text-slate-500 bg-white border rounded-xl p-4">Aucune prestation à commander.</p>}
+                                    {groups.map((g) => {
+                                        const p = g.partner;
+                                        const allConfirmed = g.lines.every((l) => lineState(l.key).status === 'confirme');
+                                        const custom = ful.partnerMessages[p.id] != null;
+                                        return (
+                                            <div key={p.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="font-black truncate">{p.name}{p.deleted && <span className="text-xs text-red-500 ml-1">(supprimé)</span>}</p>
+                                                        <p className="text-xs text-slate-500 truncate">{[p.contactName, p.phone, p.email].filter(Boolean).join(' · ')}</p>
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${allConfirmed ? SUPPLIER_STATUS.confirme.cls : SUPPLIER_STATUS[lineState(g.lines[0].key).status].cls}`}>{g.lines.length} prestation(s)</span>
+                                                </div>
+                                                <textarea rows={10} value={messageFor(g)} onChange={(e) => update({ partnerMessages: { ...ful.partnerMessages, [p.id]: e.target.value } })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono leading-relaxed outline-none focus:border-amber-500" />
+                                                {custom && <button onClick={() => { const pm = { ...ful.partnerMessages }; delete pm[p.id]; update({ partnerMessages: pm }); }} className="text-[11px] underline text-slate-500">Message modifié à la main — régénérer depuis les informations</button>}
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <button onClick={() => sendPartner(g, 'whatsapp')} disabled={!p.phone} className={`py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1 disabled:opacity-40 ${p.preferredChannel === 'whatsapp' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}><i className="ph ph-whatsapp-logo"></i> WhatsApp</button>
+                                                    <button onClick={() => sendPartner(g, 'email')} disabled={!p.email} className={`py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1 disabled:opacity-40 ${p.preferredChannel === 'email' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}><i className="ph ph-envelope-simple"></i> E-mail</button>
+                                                    <button onClick={() => sendPartner(g, 'copie')} className="py-2 rounded-lg font-bold text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center justify-center gap-1"><i className="ph ph-copy"></i> Copier</button>
+                                                </div>
+                                                {!allConfirmed && <button onClick={() => confirmGroup(g)} className="w-full py-2 rounded-lg font-bold text-sm border border-emerald-300 text-emerald-700 hover:bg-emerald-50"><i className="ph ph-check-circle"></i> Le partenaire a confirmé</button>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {tab === 'client' && (
+                                <div className="space-y-4">
+                                    <div className={`p-4 rounded-2xl border ${confirmedCount === activeLines.length && activeLines.length ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                                        <p className="font-black text-sm"><i className="ph ph-shield-check"></i> {confirmedCount}/{activeLines.length} prestation(s) confirmée(s) par les partenaires</p>
+                                        {confirmedCount < activeLines.length && <p className="text-xs mt-1">Vous pouvez envoyer la confirmation maintenant, mais il est préférable d’attendre la confirmation de tous les partenaires.</p>}
+                                        {ful.clientConfirmation && <p className="text-xs mt-1 font-bold">Confirmation envoyée le {ful.clientConfirmation.sentAt} ({ful.clientConfirmation.via}).</p>}
+                                    </div>
+                                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <OfField label="N° de confirmation"><input value={ful.confirmationNo} onChange={(e) => update({ confirmationNo: e.target.value })} className={ofInput + ' font-bold'} /></OfField>
+                                            <div className="text-xs text-slate-500 self-end pb-2">Total : <strong className="text-slate-800">{renderMoney(order.total || 0, order.currency || 'MAD')}</strong></div>
+                                        </div>
+                                        <OfField label="Informations importantes à communiquer au client" hint="Une information par ligne. Ex. documents à prévoir, numéro d’urgence, heure de check-in, tenue pour le désert…">
+                                            <textarea rows={4} value={ful.clientNotes} onChange={(e) => update({ clientNotes: e.target.value })} placeholder={'Ex. Votre chauffeur vous attendra avec une pancarte à votre nom.\nPrévoyez une pièce d’identité pour l’enregistrement.'} className={ofInput} />
+                                        </OfField>
+                                        <p className="text-[11px] text-slate-400">Les informations pratiques de chaque prestation (chauffeur, véhicule…) se saisissent dans le détail des prestations, à gauche.</p>
+                                        <OfField label="Message au client">
+                                            <textarea rows={14} value={clientMessage} onChange={(e) => update({ clientMessage: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono leading-relaxed outline-none focus:border-amber-500" />
+                                        </OfField>
+                                        {ful.clientMessage && <button onClick={() => update({ clientMessage: '' })} className="text-[11px] underline text-slate-500">Message modifié à la main — régénérer depuis les informations</button>}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={() => sendClient('whatsapp')} className="py-2 rounded-lg font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center gap-1"><i className="ph ph-whatsapp-logo"></i> WhatsApp client</button>
+                                            <button onClick={() => sendClient('email')} className="py-2 rounded-lg font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center gap-1"><i className="ph ph-envelope-simple"></i> E-mail client</button>
+                                            <button onClick={() => sendClient('copie')} className="py-2 rounded-lg font-bold text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center justify-center gap-1"><i className="ph ph-copy"></i> Copier</button>
+                                            <button onClick={printConfirmation} className="py-2 rounded-lg font-bold text-sm bg-amber-500 text-slate-900 hover:bg-amber-600 flex items-center justify-center gap-1"><i className="ph ph-file-pdf"></i> PDF de confirmation</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {newPartnerFor && <PartnerFormModal initial={{ categories: [LINE_KINDS[newPartnerFor.kind].category], cities: newPartnerFor.city || '', catalogIds: newPartnerFor.catalogId ? [newPartnerFor.catalogId] : [] }} catalog={catalog} onClose={() => setNewPartnerFor(null)}
+                        onSave={(p) => { saveCatalog({ ...catalog, partners: [...partners, p] }); updateLine(newPartnerFor.key, { partnerId: p.id, partnerSnapshot: snapshotOf(p) }); setNewPartnerFor(null); flash(`${p.name} ajouté à vos partenaires.`); }} />}
+
+                    {/* Document imprimable : confirmation de commande */}
+                    <div className="print-only w-full max-w-4xl mx-auto bg-white text-black px-10 font-sans">
+                        <PrintDocFrame company={company}>
+                            <div className="flex justify-between items-start border-b-2 border-amber-500 pb-6 mb-8">
+                                <img src={logoUrl} alt="DI’ALLO Conciergerie" className="w-64 h-auto max-h-24 object-contain object-left" />
+                                <div className="text-right">
+                                    <h2 className="text-3xl font-black text-slate-800 uppercase tracking-widest">Confirmation</h2>
+                                    <p className="text-slate-500 text-sm mt-1">de réservation</p>
+                                    <p className="font-bold text-amber-700 mt-3">N° {ful.confirmationNo}</p>
+                                    <p className="text-slate-400 text-xs mt-1">Émise le {new Date().toLocaleDateString('fr-FR')} · Commande {order.id}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6 mb-8">
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                    <p className="text-xs text-slate-400 uppercase font-bold mb-1">Client</p>
+                                    <p className="font-bold text-lg">{clientName}</p>
+                                    {client && client.phone && <p className="text-sm text-slate-600">{client.phone}</p>}
+                                    {client && client.email && <p className="text-sm text-slate-600">{client.email}</p>}
+                                </div>
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                    <p className="text-xs text-slate-400 uppercase font-bold mb-1">Votre voyage</p>
+                                    <p className="font-bold">{order.tripName}</p>
+                                    <p className="text-sm text-slate-600">{fulfillmentTravelers(ful)}</p>
+                                    {(ful.arrivalFlight || ful.arrivalTime) && <p className="text-sm text-slate-600">Arrivée : {[ful.arrivalFlight && `vol ${ful.arrivalFlight}`, ful.arrivalTime].filter(Boolean).join(' à ')}</p>}
+                                    {(ful.departureFlight || ful.departureTime) && <p className="text-sm text-slate-600">Départ : {[ful.departureFlight && `vol ${ful.departureFlight}`, ful.departureTime].filter(Boolean).join(' à ')}</p>}
+                                </div>
+                            </div>
+                            <div className="mb-8 bg-slate-50 p-6 rounded-xl border-l-4 border-amber-500">
+                                <h3 className="text-lg font-black text-slate-800 mb-2 uppercase tracking-wider">Votre réservation est confirmée</h3>
+                                <p className="text-slate-600 leading-relaxed"><ServiceSummaryText summary={summary} /></p>
+                            </div>
+                            <h3 className="text-lg font-bold text-amber-700 uppercase tracking-wider mb-3">Vos prestations</h3>
+                            <table className="w-full text-left border-collapse mb-8">
+                                <thead><tr className="bg-slate-100 text-slate-600 text-xs uppercase"><th className="p-3">Prestation</th><th className="p-3">Date et heure</th><th className="p-3">Informations pratiques</th></tr></thead>
+                                <tbody>
+                                    {lines.filter((l) => lineState(l.key).status !== 'annule').map((l) => {
+                                        const eff = effectiveLine(l, ful);
+                                        const lab = LINE_FIELD_LABELS[l.kind];
+                                        return (
+                                            <tr key={l.key} className="border-b border-slate-100 align-top" style={{ breakInside: 'avoid' }}>
+                                                <td className="p-3"><p className="text-[10px] font-bold uppercase text-amber-700">{LINE_KINDS[l.kind].label}</p><p className="font-bold">{l.label}</p></td>
+                                                <td className="p-3 text-sm">{l.when}{eff.time ? <span className="block font-bold">{lab.time} : {eff.time}</span> : null}</td>
+                                                <td className="p-3 text-sm text-slate-600 whitespace-pre-line">{[eff.place1 && lab.place1 ? `${lab.place1} : ${eff.place1}` : '', eff.flight && lab.flight ? `Vol : ${eff.flight}` : '', eff.clientInfo].filter(Boolean).join('\n') || '—'}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            <div className="flex justify-end mb-8" style={{ breakInside: 'avoid' }}>
+                                <div className="w-1/2 bg-slate-50 p-5 rounded-xl border-2 border-slate-100">
+                                    <div className="flex justify-between text-slate-600 mb-2"><span>Sous-total prestations</span><span>{renderMoney(order.subTotal || 0, order.currency || 'MAD')}</span></div>
+                                    <div className="flex justify-between text-amber-700 font-bold mb-3 pb-3 border-b border-slate-200"><span>Honoraires</span><span>{renderMoney(order.finalFee || 0, order.currency || 'MAD')}</span></div>
+                                    <div className="flex justify-between items-end"><span className="font-black uppercase">Total</span><span className="text-2xl font-black">{renderMoney(order.total || 0, order.currency || 'MAD')}</span></div>
+                                </div>
+                            </div>
+                            {ful.clientNotes && ful.clientNotes.trim() && (
+                                <div className="mb-8 p-5 rounded-xl border-2 border-amber-200 bg-amber-50/40" style={{ breakInside: 'avoid' }}>
+                                    <h4 className="font-black text-slate-800 uppercase tracking-wider mb-2">Informations importantes</h4>
+                                    <ul className="list-disc pl-5 space-y-1 text-slate-700">{ful.clientNotes.split('\n').filter((x) => x.trim()).map((x, i) => <li key={i}>{x.trim()}</li>)}</ul>
+                                </div>
+                            )}
+                            <p className="text-slate-600 text-sm">Pour toute question avant ou pendant votre séjour, contactez-nous au <strong>{normalizeCompany(company).phones}</strong>. Nous vous souhaitons un excellent séjour !</p>
+                        </PrintDocFrame>
+                    </div>
                 </div>
             );
         }
